@@ -1,0 +1,87 @@
+# Infraestrutura de nomes e roteamento.
+#
+# CONFLITOS DE PORTA CONTORNADOS (por isso os binds sao por IP):
+#   53  -> o systemd-resolved ocupa apenas 127.0.0.53/127.0.0.54 (loopback).
+#          O AdGuard escuta nos IPs reais, sem precisar desabilitar o stub.
+#   443 -> o tailscaled ja ocupa TS_IP:443 (Serve/Funnel).
+#          O NPM escuta so no IP da LAN.
+
+services:
+  adguard:
+    image: adguard/adguardhome:latest
+    container_name: adguard
+    restart: unless-stopped
+    network_mode: host
+    volumes:
+      - ./adguard/work:/opt/adguardhome/work
+      - ./adguard/conf:/opt/adguardhome/conf
+    # network_mode host: o AdGuard precisa ver o IP de origem real das
+    # consultas para aplicar regras por cliente. Com bridge, tudo chegaria
+    # com o IP do gateway do Docker.
+
+  npm:
+    image: jc21/nginx-proxy-manager:latest
+    container_name: npm
+    restart: unless-stopped
+    ports:
+      - "80:80"                    # HTTP
+      - "${LAN_IP:?defina LAN_IP no .env da raiz}:443:443"   # HTTPS so na LAN (a 443 do Tailscale e do tailscaled)
+      - "81:81"                    # painel de administracao
+    volumes:
+      - ./npm/data:/data
+      - ./npm/letsencrypt:/etc/letsencrypt
+
+  homepage:
+    image: ghcr.io/gethomepage/homepage:latest
+    container_name: homepage
+    restart: unless-stopped
+    ports:
+      - "${HOMEPAGE_PORT:?defina HOMEPAGE_PORT no .env da raiz}:3000"   # 3000 do container; no host usa outra (o AdGuard ocupa a 3000)
+    volumes:
+      - ./homepage/config:/app/config
+      # socket do Docker somente leitura: permite mostrar o status dos containers
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      # somente leitura: o widget de recursos precisa enxergar o SSD para medir espaco
+      - ${MEDIA_ROOT:?defina MEDIA_ROOT no .env da raiz}:${MEDIA_ROOT}:ro,rshared
+      # pt-BR (tag BCP 47 valida, exigida por toLocaleString) completado
+      # com as traducoes que so existiam no locale pt_BR
+      - ./homepage/locales/pt-BR.json:/app/public/locales/pt-BR/common.json:ro
+      # icone da guia do navegador: a mesma marca do cabecalho, sobrescrevendo
+      # os quatro arquivos que o Homepage referencia no <head>. Sao montagens
+      # de ARQUIVO, uma a uma, para nao esconder o resto de /app/public.
+      - ./homepage/icones-guia/homepage.ico:/app/public/homepage.ico:ro
+      - ./homepage/icones-guia/favicon-32x32.png:/app/public/favicon-32x32.png:ro
+      - ./homepage/icones-guia/favicon-16x16.png:/app/public/favicon-16x16.png:ro
+      - ./homepage/icones-guia/apple-touch-icon.png:/app/public/apple-touch-icon.png:ro
+    environment:
+      # obrigatorio nas versoes recentes; libera os nomes pelos quais o painel e acessado
+      HOMEPAGE_ALLOWED_HOSTS: "central.${INTERNAL_DOMAIN:?defina INTERNAL_DOMAIN no .env da raiz},${LAN_IP}:${HOMEPAGE_PORT},localhost:${HOMEPAGE_PORT},${TS_IP:?defina TS_IP no .env da raiz}:${HOMEPAGE_PORT}"
+
+      # O Homepage resolve {{HOMEPAGE_VAR_X}} dentro de config/*.yaml a partir
+      # do proprio ambiente. E por isso que services.yaml pode ser versionado:
+      # nenhuma chave fica no arquivo. Lista explicita de proposito — um
+      # `env_file` empurraria PUID, caminhos e tudo mais para dentro do container.
+      #
+      # As tres primeiras ja tem valor conhecido antes de qualquer container
+      # subir (vem da secao "rede e dominio" do .env), entao usam `:?` como o
+      # resto do arquivo. As demais so existem DEPOIS do primeiro login em
+      # cada servico (docs/01-instalacao.md, passo 5) — exigir com `:?` faria
+      # o Compose abortar bem na primeira subida da stack, antes de qualquer
+      # servico existir para gerar a propria chave. Por isso ficam sem `:?`:
+      # em branco, o Compose aceita e o painel so renderiza o literal
+      # "{{HOMEPAGE_VAR_X}}" (o widget falha sem registro em log; ver
+      # docs/02-painel.md).
+      HOMEPAGE_VAR_LAN_IP:       ${HOMEPAGE_VAR_LAN_IP:?}
+      HOMEPAGE_VAR_MEDIA_ROOT:   ${HOMEPAGE_VAR_MEDIA_ROOT:?}
+      HOMEPAGE_VAR_TS_HOSTNAME:  ${HOMEPAGE_VAR_TS_HOSTNAME:?}
+      HOMEPAGE_VAR_JELLYFIN_KEY: ${HOMEPAGE_VAR_JELLYFIN_KEY:-}
+      HOMEPAGE_VAR_SEERR_KEY:    ${HOMEPAGE_VAR_SEERR_KEY:-}
+      HOMEPAGE_VAR_RADARR_KEY:   ${HOMEPAGE_VAR_RADARR_KEY:-}
+      HOMEPAGE_VAR_SONARR_KEY:   ${HOMEPAGE_VAR_SONARR_KEY:-}
+      HOMEPAGE_VAR_BAZARR_KEY:   ${HOMEPAGE_VAR_BAZARR_KEY:-}
+      HOMEPAGE_VAR_PROWLARR_KEY: ${HOMEPAGE_VAR_PROWLARR_KEY:-}
+      HOMEPAGE_VAR_QBT_USER:     ${HOMEPAGE_VAR_QBT_USER:-}
+      HOMEPAGE_VAR_QBT_PASS:     ${HOMEPAGE_VAR_QBT_PASS:-}
+      HOMEPAGE_VAR_ADGUARD_USER: ${HOMEPAGE_VAR_ADGUARD_USER:-}
+      HOMEPAGE_VAR_ADGUARD_PASS: ${HOMEPAGE_VAR_ADGUARD_PASS:-}
+      HOMEPAGE_VAR_ROMM_KEY:     ${HOMEPAGE_VAR_ROMM_KEY:-}

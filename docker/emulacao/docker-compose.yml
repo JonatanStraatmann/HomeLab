@@ -1,0 +1,61 @@
+# Catálogo de ROMs (RomM) e banco próprio, em rede bridge dedicada — mesmo
+# padrão do arr-stack: os dois containers se enxergam pelo nome (romm ->
+# romm-db) sem depender do host.
+#
+# Porta do host escolhida para não colidir com as já usadas pelas outras
+# stacks (ver docs/00-arquitetura.md): 8090 está livre.
+
+services:
+  romm:
+    image: rommapp/romm:latest
+    container_name: romm
+    restart: unless-stopped
+    environment:
+      DB_HOST: romm-db
+      DB_NAME: romm
+      DB_USER: romm-user
+      DB_PASSWD: ${ROMM_DB_PASSWORD:?defina ROMM_DB_PASSWORD no .env da raiz}
+      ROMM_AUTH_SECRET_KEY: "${ROMM_AUTH_SECRET_KEY:?defina ROMM_AUTH_SECRET_KEY no .env da raiz, gerada com openssl rand -hex 32}"
+      # Fontes de metadados. Hasheous identifica por hash do arquivo e não
+      # exige conta; as demais são opcionais e ficam em branco até o operador
+      # criar conta em cada serviço — ver docs/01-instalacao.md.
+      SCREENSCRAPER_USER: ${ROMM_SCREENSCRAPER_USER:-}
+      SCREENSCRAPER_PASSWORD: ${ROMM_SCREENSCRAPER_PASSWORD:-}
+      RETROACHIEVEMENTS_API_KEY: ${ROMM_RETROACHIEVEMENTS_API_KEY:-}
+      STEAMGRIDDB_API_KEY: ${ROMM_STEAMGRIDDB_API_KEY:-}
+      HASHEOUS_API_ENABLED: "true"
+      SCAN_WORKERS: 4
+      WEB_SERVER_CONCURRENCY: 4
+    volumes:
+      - ./romm/resources:/romm/resources   # capas, screenshots etc. buscados nos provedores de metadados
+      - ./romm/redis-data:/redis-data      # fila de tarefas em segundo plano (scan da biblioteca)
+      - ./romm/assets:/romm/assets         # save states e saves enviados pela interface
+      - ./romm/config:/romm/config         # config.yml (mapeamento manual de plataformas, se precisar)
+      # Biblioteca de ROMs. Estrutura esperada dentro da pasta: roms/<slug-da-
+      # -plataforma>/arquivo (ex.: roms/snes, roms/gba) — ver docs/01-instalacao.md.
+      - ${ROMS_ROOT:?defina ROMS_ROOT no .env da raiz}:/romm/library
+    ports:
+      - "8090:8080"
+    depends_on:
+      romm-db:
+        condition: service_healthy
+        restart: true
+
+  romm-db:
+    image: mariadb:latest
+    container_name: romm-db
+    restart: unless-stopped
+    environment:
+      MARIADB_ROOT_PASSWORD: ${ROMM_DB_ROOT_PASSWORD:?defina ROMM_DB_ROOT_PASSWORD no .env da raiz}
+      MARIADB_DATABASE: romm
+      MARIADB_USER: romm-user
+      MARIADB_PASSWORD: ${ROMM_DB_PASSWORD:?defina ROMM_DB_PASSWORD no .env da raiz}
+    volumes:
+      - ./romm-db/data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      start_period: 30s
+      start_interval: 10s
+      interval: 10s
+      timeout: 5s
+      retries: 5

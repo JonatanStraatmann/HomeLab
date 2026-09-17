@@ -1,0 +1,75 @@
+# Modelo de referência da configuração do AdGuard Home utilizada nesta instalação.
+# Não constitui uma cópia do arquivo em uso: usuários, hashes de senha, segredos de
+# sessão e dados estatísticos foram omitidos.
+#
+# PROCEDIMENTO DE APLICAÇÃO
+#   1. Iniciar o AdGuard e concluir o assistente inicial, que cria as credenciais
+#      administrativas deliberadamente ausentes deste modelo.
+#   2. Interromper o container:  docker compose stop adguard
+#   3. Mesclar os trechos abaixo em conf/AdGuardHome.yaml
+#   4. Reiniciar o container:    docker compose start adguard
+#
+# A etapa 2 é obrigatória: o AdGuard mantém a configuração em memória e reescreve o
+# arquivo YAML ao encerrar, descartando edições feitas com o container em execução.
+# Ver docs/03-problemas-conhecidos.md.
+#
+# Este arquivo reside fora de conf/ para não ser lido pelo AdGuard.
+
+# --- a peça central: o domínio interno -------------------------------------
+# Uma única reescrita curinga resolve qualquer nome novo sem cadastro. Aponte
+# para o IP da LAN do servidor (o mesmo LAN_IP do .env); quem traduz nome para
+# porta depois é o Nginx Proxy Manager.
+#
+# O TLD precisa ser inexistente de verdade. ".casa" e ".lan" SÃO TLDs reais e
+# fazem a consulta vazar para a internet quando o DNS interno não responde.
+filtering:
+  rewrites:
+    - domain: '*.jts'
+      answer: 192.168.1.10      # troque pelo seu LAN_IP
+      enabled: true
+  # ATENÇÃO: reescritas adicionadas direto no YAML nascem com enabled:false
+  # implícito. Escreva "enabled: true" explicitamente, senão a regra aparece
+  # na interface mas não resolve nada.
+
+  filtering_enabled: true
+  blocked_response_ttl: 10
+
+# --- listas de bloqueio ------------------------------------------------------
+filters:
+  - name: AdGuard DNS filter
+    url: https://adguardteam.github.io/HostlistsRegistry/assets/filter_1.txt
+    enabled: true
+  - name: AdAway Default Blocklist
+    url: https://adguardteam.github.io/HostlistsRegistry/assets/filter_2.txt
+    enabled: true
+  - name: OISD Blocklist Big
+    url: https://big.oisd.nl
+    enabled: true
+  - name: Peter Lowe's Blocklist
+    url: https://pgl.yoyo.org/adservers/serverlist.php?hostformat=adblockplus&showintro=0&mimetype=plaintext
+    enabled: true
+
+# --- escuta ------------------------------------------------------------------
+# O container roda em network_mode: host porque o AdGuard precisa do IP de
+# origem REAL de cada consulta para aplicar regras por cliente — numa rede
+# bridge tudo chegaria com o IP do gateway do Docker.
+#
+# Escutar em 0.0.0.0:53 convive com o systemd-resolved, que ocupa apenas
+# 127.0.0.53 e 127.0.0.54 (loopback). Não é preciso desabilitar o stub.
+dns:
+  bind_hosts:
+    - 0.0.0.0
+  port: 53
+  upstream_dns:
+    - https://dns.quad9.net/dns-query
+    - https://dns.cloudflare.com/dns-query
+
+# A interface web fica na 3000, e é por isso que o Homepage usa 3001 no host.
+http:
+  address: 0.0.0.0:3000
+
+# --- o que NÃO está aqui -----------------------------------------------------
+# users:        usuário e hash bcrypt — criados pelo assistente inicial
+# http.session_ttl / session secrets
+# clients:      nomes e IPs dos dispositivos da casa
+# statistics / querylog: estado, não configuração

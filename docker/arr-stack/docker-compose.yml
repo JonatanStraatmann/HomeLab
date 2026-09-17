@@ -1,0 +1,104 @@
+# Stack de automacao de midia. O Jellyfin roda separado, em
+# ../jellyfin (network_mode: host, porta 8096).
+#
+# DECISAO DE LAYOUT: todos os servicos montam VIDEO_ROOT como /data.
+# Um unico volume faz o Radarr/Sonarr importarem por HARDLINK em vez de
+# copiar — instantaneo e sem duplicar espaco. Testei: o NTFS aceita hardlink.
+
+networks:
+  arr:
+    driver: bridge
+
+x-comum: &comum
+  restart: unless-stopped
+  environment: &env
+    PUID: ${PUID:?defina PUID no .env da raiz}
+    PGID: ${PGID:?defina PGID no .env da raiz}
+    TZ: ${TZ:?defina TZ no .env da raiz}
+  networks:
+    - arr
+
+services:
+  prowlarr:                      # gerencia indexadores e alimenta radarr/sonarr
+    <<: *comum
+    image: lscr.io/linuxserver/prowlarr:latest
+    container_name: prowlarr
+    ports:
+      - "9696:9696"
+    volumes:
+      - ./prowlarr/config:/config
+
+  radarr:                        # filmes
+    <<: *comum
+    image: lscr.io/linuxserver/radarr:latest
+    container_name: radarr
+    ports:
+      - "7878:7878"
+    volumes:
+      - ./radarr/config:/config
+      - ${VIDEO_ROOT:?defina VIDEO_ROOT no .env da raiz}:/data:rshared
+
+  sonarr:                        # series
+    <<: *comum
+    image: lscr.io/linuxserver/sonarr:latest
+    container_name: sonarr
+    ports:
+      - "8989:8989"
+    volumes:
+      - ./sonarr/config:/config
+      - ${VIDEO_ROOT:?defina VIDEO_ROOT no .env da raiz}:/data:rshared
+
+  bazarr:                        # legendas
+    <<: *comum
+    image: lscr.io/linuxserver/bazarr:latest
+    container_name: bazarr
+    ports:
+      - "6767:6767"
+    volumes:
+      - ./bazarr/config:/config
+      - ${VIDEO_ROOT:?defina VIDEO_ROOT no .env da raiz}:/data:rshared
+
+  qbittorrent:                   # cliente de download
+    <<: *comum
+    image: lscr.io/linuxserver/qbittorrent:latest
+    container_name: qbittorrent
+    environment:
+      <<: *env
+      WEBUI_PORT: ${QBT_WEBUI_PORT:?defina QBT_WEBUI_PORT no .env da raiz}
+    ports:
+      - "${QBT_WEBUI_PORT}:${QBT_WEBUI_PORT}"
+      - "6881:6881"
+      - "6881:6881/udp"
+    volumes:
+      - ./qbittorrent/config:/config
+      - ${VIDEO_ROOT:?defina VIDEO_ROOT no .env da raiz}:/data:rshared
+      # Downloads em andamento vao para o HD interno (ext4), NAO para o SSD
+      # externo. Motivo: o BitTorrent grava pecas fora de ordem, e escrita
+      # aleatoria de 64 KB rende 6,9 MB/s no ntfs-3g contra 24 MB/s aqui.
+      # Isso prendia o sistema em 73-80% de iowait. Ao concluir, o qBittorrent
+      # move para /data/Downloads/completos numa unica passada sequencial,
+      # onde o ntfs-3g rende 210 MB/s. Os hardlinks do Radarr/Sonarr seguem
+      # funcionando, pois completos e a biblioteca ficam ambos no SSD.
+      - ${DOWNLOADS_INCOMPLETE:?defina DOWNLOADS_INCOMPLETE no .env da raiz}:/incompletos
+
+  seerr:                         # antigo Jellyseerr. Em out/2025 o projeto se
+                                 # fundiu com o Overseerr e virou Seerr; a imagem
+                                 # fallenbagel/jellyseerr parou de ser publicada.
+    image: ghcr.io/seerr-team/seerr:latest
+    container_name: seerr
+    init: true                   # exigido pelo Seerr
+    restart: unless-stopped
+    networks:
+      - arr
+    # Sem PUID/PGID: o Seerr roda como o usuario 'node' (uid 1000) por padrao.
+    environment:
+      TZ: ${TZ:?defina TZ no .env da raiz}
+      PORT: 5055
+    ports:
+      - "5055:5055"
+    volumes:
+      - ./seerr/config:/app/config
+    # o Jellyfin usa network_mode:host, entao daqui ele e alcancado
+    # por host.docker.internal:8096
+    extra_hosts:
+      - "host.docker.internal:host-gateway"

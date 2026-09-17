@@ -1,0 +1,176 @@
+# As URLs dos widgets usam o IP do host ({{HOMEPAGE_VAR_LAN_IP}}, definido no
+# .env da raiz) porque o Homepage esta na rede infra_default e a stack de midia
+# na rede arr — elas nao se enxergam por nome de container. Pelo IP, todas
+# publicam porta no host.
+#
+# As chaves e senhas vem do ambiente do container, declaradas uma a uma no
+# bloco `environment:` de ../../docker-compose.yml. Se um card aparecer com o
+# texto literal "{{HOMEPAGE_VAR_...}}", falta a variavel no .env.
+
+- Mídia:
+    - Taiflix (Jellyfin):
+        href: http://taiflix.jts
+        description: Servidor de streaming. Assista filmes e series em qualquer aparelho da casa
+        icon: jellyfin.png
+        server: local
+        container: jellyfin
+        widget:
+          type: jellyfin
+          url: http://{{HOMEPAGE_VAR_LAN_IP}}:8096
+          key: {{HOMEPAGE_VAR_JELLYFIN_KEY}}
+          enableBlocks: true
+          enableNowPlaying: true
+
+    - Pedidos (Seerr):
+        href: http://pedidos.jts
+        description: Peca um filme ou serie. O pedido vai para a fila e baixa sozinho
+        icon: jellyseerr.png
+        server: local
+        container: seerr
+        widget:
+          type: seerr
+          url: http://{{HOMEPAGE_VAR_LAN_IP}}:5055
+          key: {{HOMEPAGE_VAR_SEERR_KEY}}
+
+- Automação de Mídia:
+    - Filmes (Radarr):
+        href: http://filmes.jts
+        description: Gerencia a biblioteca de filmes, busca e organiza os arquivos
+        icon: radarr.png
+        server: local
+        container: radarr
+        widget:
+          type: radarr
+          url: http://{{HOMEPAGE_VAR_LAN_IP}}:7878
+          key: {{HOMEPAGE_VAR_RADARR_KEY}}
+
+    - Séries (Sonarr):
+        href: http://series.jts
+        description: Mesma funcao do Radarr, para series e episodios
+        icon: sonarr.png
+        server: local
+        container: sonarr
+        widget:
+          type: sonarr
+          url: http://{{HOMEPAGE_VAR_LAN_IP}}:8989
+          key: {{HOMEPAGE_VAR_SONARR_KEY}}
+
+    - Legendas (Bazarr):
+        href: http://legendas.jts
+        description: Busca e sincroniza legendas em portugues automaticamente
+        icon: bazarr.png
+        server: local
+        container: bazarr
+        widget:
+          type: bazarr
+          url: http://{{HOMEPAGE_VAR_LAN_IP}}:6767
+          key: {{HOMEPAGE_VAR_BAZARR_KEY}}
+
+    - Indexadores (Prowlarr):
+        href: http://indexadores.jts
+        description: Central de indexadores. Alimenta o Radarr e o Sonarr com fontes de busca
+        icon: prowlarr.png
+        server: local
+        container: prowlarr
+        widget:
+          type: prowlarr
+          url: http://{{HOMEPAGE_VAR_LAN_IP}}:9696
+          key: {{HOMEPAGE_VAR_PROWLARR_KEY}}
+
+    - Downloads (qBittorrent):
+        href: http://torrent.jts
+        description: Cliente de download. E aqui que os arquivos chegam antes de entrar na biblioteca
+        icon: qbittorrent.png
+        server: local
+        container: qbittorrent
+        widget:
+          type: qbittorrent
+          url: http://{{HOMEPAGE_VAR_LAN_IP}}:8080
+          username: {{HOMEPAGE_VAR_QBT_USER}}
+          password: {{HOMEPAGE_VAR_QBT_PASS}}
+
+- Emulação:
+    - Biblioteca (RomM):
+        href: http://roms.jts
+        description: Catálogo de ROMs, com capas e metadados buscados automaticamente
+        icon: romm.png
+        server: local
+        container: romm
+        widget:
+          type: romm
+          url: http://{{HOMEPAGE_VAR_LAN_IP}}:8090
+          key: {{HOMEPAGE_VAR_ROMM_KEY}}
+          fields: ["platforms", "totalRoms", "saves", "states"]
+
+    - ROMs por console:
+        description: Quantidade de ROMs catalogadas, por plataforma
+        icon: mdi-controller-classic
+        widget:
+          type: customapi
+          url: http://{{HOMEPAGE_VAR_LAN_IP}}:8099/roms
+          refreshInterval: 60000
+          display: dynamic-list
+          mappings:
+            items: consoles
+            name: nome
+            label: quantidade
+            limit: 10
+
+- Infraestrutura:
+    - VPN (Tailscale):
+        description: Aparelhos conectados a rede Tailscale neste momento
+        icon: tailscale.png
+        widget:
+          type: customapi
+          url: http://{{HOMEPAGE_VAR_LAN_IP}}:8099/vpn
+          refreshInterval: 30000
+          display: dynamic-list
+          mappings:
+            items: lista
+            name: nome
+            label: estado
+            limit: 8
+
+
+    - DNS e Bloqueio (AdGuard):
+        href: http://dns.jts
+        description: Servidor DNS da rede. Bloqueia anuncios, rastreadores e sites de phishing
+        icon: adguard-home.png
+        server: local
+        container: adguard
+        widget:
+          type: adguard
+          url: http://{{HOMEPAGE_VAR_LAN_IP}}:3000
+          username: {{HOMEPAGE_VAR_ADGUARD_USER}}
+          password: {{HOMEPAGE_VAR_ADGUARD_PASS}}
+
+    - Proxy (Nginx Proxy Manager):
+        href: http://proxy.jts
+        description: Traduz os nomes .jts para as portas de cada servico
+        icon: nginx-proxy-manager.png
+        server: local
+        container: npm
+- Outros:
+    - Painel Wakfu:
+        # Tailscale Serve: resolve para este servidor de dentro da tailnet, com
+        # HTTPS e certificado valido — nao depende do .jts nem do IP da LAN
+        href: https://{{HOMEPAGE_VAR_TS_HOSTNAME}}/
+        description: Coleta de precos do mercado do Wakfu, roda 2x ao dia
+        # O Homepage desenha icones "mdi-" como mascara CSS e pinta com o degrade
+        # --color-logo-start -> --color-logo-stop. Este aqui e pintado com as
+        # cores da logo do Wakfu, fixas, na secao [10b] do custom.css.
+        icon: mdi-chart-line
+        widget:
+          type: customapi
+          url: http://{{HOMEPAGE_VAR_LAN_IP}}:8099/wakfu
+          refreshInterval: 60000
+          display: block
+          mappings:
+            - field: estado
+              label: Situacao
+            - field: ultima
+              label: Ultima coleta
+            - field: proxima
+              label: Proxima
+            - field: faltam
+              label: Faltam

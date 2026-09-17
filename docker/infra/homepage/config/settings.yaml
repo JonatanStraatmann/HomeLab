@@ -1,0 +1,34 @@
+title: Central de Aplicativos
+description: Servicos hospedados no servidor de casa
+startUrl: http://central.jts
+
+headerStyle: boxed
+hideVersion: true
+language: pt-BR
+
+# Definir "color" REMOVE o seletor de cor nativo do rodape — foi pedido.
+# Com as paletas do custom.css no ar, o unico efeito visivel que restava a esse
+# seletor era pintar o icone mdi- do Painel Wakfu, e esse icone agora tem as
+# cores fixas da logo do jogo (custom.css, secao [10b]).
+#
+# O valor "slate" ainda importa: e a rampa que a paleta "Homepage" deixa passar.
+#
+# "theme" segue AUSENTE de proposito: e o que mantem o botao claro/escuro.
+color: slate
+
+layout:
+  Mídia:
+    style: row
+    columns: 2
+  Automação de Mídia:
+    style: row
+    columns: 3
+  Emulação:
+    style: row
+    columns: 2
+  Infraestrutura:
+    style: row
+    columns: 3
+  Outros:
+    style: row
+    columns: 2

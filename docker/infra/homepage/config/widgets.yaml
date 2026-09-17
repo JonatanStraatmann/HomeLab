@@ -1,0 +1,17 @@
+# Sem barra de busca: o espaco fica todo para os recursos do sistema.
+- resources:
+    cpu: true
+    memory: true
+    cputemp: true
+    tempmin: 20
+    tempmax: 100
+    uptime: true
+    units: metric
+    diskUnits: bytes
+    # O segundo disco e a midia. O caminho aqui e o de DENTRO do container, e
+    # por isso o compose monta MEDIA_ROOT no mesmo caminho dos dois lados.
+    # A marca "2" no icone deste disco vem de um :nth-child() no custom.css —
+    # mudar a composicao desta faixa quebra o estilo em silencio.
+    disk:
+      - /
+      - {{HOMEPAGE_VAR_MEDIA_ROOT}}

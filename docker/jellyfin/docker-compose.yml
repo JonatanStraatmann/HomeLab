@@ -1,0 +1,44 @@
+services:
+  jellyfin:
+    image: jellyfin/jellyfin:latest
+    container_name: jellyfin
+    restart: unless-stopped
+
+    # Roda com o uid/gid do dono da midia, para casar com o mount NTFS.
+    user: "${PUID:?defina PUID no .env da raiz}:${PGID:?defina PGID no .env da raiz}"
+
+    # Grupos necessarios para acessar /dev/dri (Quick Sync).
+    # ATENCAO: estes GIDs variam por distribuicao — confira com
+    # `getent group render` e `getent group video` antes de reaproveitar.
+    group_add:
+      - "${RENDER_GID:?defina RENDER_GID no .env da raiz}"
+      - "${VIDEO_GID:?defina VIDEO_GID no .env da raiz}"
+
+    # Modo host: necessario para descoberta DLNA e para o Jellyfin
+    # enxergar os IPs reais da LAN. Expoe a porta 8096 direto.
+    network_mode: host
+
+    # Transcodificacao por hardware via VAAPI (aqui, uma Intel UHD 630).
+    # Sem GPU utilizavel, remova este bloco inteiro.
+    devices:
+      - ${DRI_DEVICE:?defina DRI_DEVICE no .env da raiz}:/dev/dri
+
+    volumes:
+      - ./config:/config
+      - ./cache:/cache
+      # Biblioteca somente leitura: o Jellyfin nao precisa escrever na midia,
+      # e isso protege o NTFS de qualquer gravacao acidental.
+      - ${MEDIA_ROOT:?defina MEDIA_ROOT no .env da raiz}:/media:ro,rshared
+      # index.html modificado (injeta <script> do hero da home) + a pasta com
+      # o script em si. Extraidos manualmente da imagem; se o Jellyfin for
+      # atualizado e o hero sumir, reextrair o index.html novo e reaplicar a
+      # linha do script. IMPORTANTE: index.html e bind mount de ARQUIVO unico
+      # -> ferramentas que reescrevem via rename quebram o mount (precisa
+      # `docker compose up -d` de novo pra recriar). A pasta custom/ e bind
+      # mount de DIRETORIO -> edicoes nos arquivos dentro dela refletem ao
+      # vivo, sem precisar recriar o container.
+      - ./web-custom/index.html:/jellyfin/jellyfin-web/index.html:ro
+      - ./web-custom/custom:/jellyfin/jellyfin-web/custom:ro
+
+    environment:
+      - TZ=${TZ:?defina TZ no .env da raiz}

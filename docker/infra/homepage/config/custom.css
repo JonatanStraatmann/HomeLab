@@ -1,0 +1,1385 @@
+/* ============================================================================
+   CENTRAL DE APLICATIVOS — folha de estilo
+   ============================================================================
+
+   COMO ESTE ARQUIVO CONVERSA COM O HOMEPAGE
+   -----------------------------------------
+   1) custom.css e carregado ANTES do CSS do Homepage:
+
+        <link rel="stylesheet" href="/api/config/custom.css">
+        <link rel="stylesheet" href="/_next/static/css/....css">
+
+      Em empate de especificidade quem ganha e o Homepage. Por isso as regras
+      daqui usam ancoras de ID (#inner_wrapper, #information-widgets, ...) ou
+      !important. Um seletor de classe puro como ".service-card" NAO funciona.
+
+   2) O Homepage escolhe a paleta pondo a classe "theme-<cor>" no <html>, que
+      define --color-50 ... --color-900 (triplas RGB separadas por espaco):
+
+        html.theme-slate { --color-900: 15 23 42; ... }
+
+      Todo o Tailwind do painel le essas variaveis (bg-theme-800, text-theme-200).
+      Trocar a paleta e, portanto, so redefinir a rampa.
+
+   3) A classe "dark" tambem vive no <html>. Modo claro = ausencia dela.
+
+   AS PALETAS
+   ----------
+   Cada paleta redefine a rampa em ":root[data-paleta=NOME]", ou seja NO <html>,
+   e nao no <body>. Isso importa: o Homepage declara
+
+        .dark { --bg-color: var(--color-800) }
+
+   no proprio <html>, e uma custom property e resolvida no elemento onde e
+   declarada. Com a rampa no <body>, --bg-color continuava pegando a rampa do
+   theme-slate e o fundo da pagina ficava slate-800 fixo, sem seguir a paleta.
+
+   Especificidade: ":root[data-paleta=X]" conta 2 no nivel de classe (a
+   pseudo-classe :root + o atributo) e vence "html.theme-slate" (1 classe +
+   1 tipo) sem depender da ordem de carregamento.
+
+   O atributo data-paleta e escrito no <html> pelo custom.js (secao [11]).
+
+   TRES ESTADOS DO ATRIBUTO
+     ausente             primeira visita, antes do custom.js rodar: cai em
+                         ":root:not([data-paleta])", a paleta padrao (marinho)
+     data-paleta="nome"  uma das paletas da secao [1]
+     data-paleta="nativo" valor EXPLICITO e de proposito sem bloco na secao [1]:
+                         a rampa do Homepage passa intacta, dando o cinza-
+                         azulado original do painel (a cor de "color:" no
+                         settings.yaml, hoje slate). Nao remover o atributo para
+                         isso: sem atributo valeria a paleta padrao.
+
+   Cada paleta define apenas:
+      --color-50..900   rampa clara -> escura (lida pelo Tailwind do Homepage)
+      --pl-acc          cor de destaque
+      --pl-acc2         destaque secundario
+   As superficies (vidro, linhas, sombras, fundo) sao derivadas dessas cinco
+   coisas na secao [2], uma vez so, e valem para todas as paletas.
+
+   ORDEM DAS SECOES
+   ----------------
+   [0]  portao de revelacao (o anti-pisco do carregamento)
+   [1]  paletas
+   [2]  tokens de superficie (derivados) claro/escuro
+   [3]  fundo da pagina: aurora + grade + vinheta
+   [4]  faixa de recursos do topo (vidro)
+   [5]  blocos de recurso: chip, icone, valor, barra
+   [6]  barra sob o uptime  ....................... comportamento preservado
+   [7]  marcador "2" no segundo disco  ............ comportamento preservado
+   [8]  titulos de secao + divisoria  ............. comportamento preservado
+   [8b] alinhamento do titulo da secao "Servidor"
+   [8c] cabecalho da pagina: marca + titulo
+   [9]  cards de servico
+   [10] blocos de widget dentro do card
+   [10b] icone do Painel Wakfu: as cores da logo do jogo
+   [11] controles do rodape + seletor de paleta
+   [12] dialogo de busca
+   [13] responsivo e movimento reduzido
+
+   PONTOS FRAGEIS — leia antes de mexer
+   ------------------------------------
+   As secoes [6] e [7] dependem da POSICAO dos blocos em widgets.yaml:
+
+        1 CPU | 2 Memoria | 3 Disco / | 4 Disco SSD | 5 Temperatura | 6 Uptime
+
+   [7] poe o marcador "2" no 4o bloco (:nth-child(4), o SSD externo)
+   [6] esconde a barra do ULTIMO bloco (:last-child, o uptime)
+   e o custom.js converte a unidade do 2o bloco (memoria).
+
+   Acrescentar "network:" ou remover "cputemp:" desloca tudo e quebra os tres
+   SILENCIOSAMENTE, sem erro no log. Se mexer na composicao, reajustar os
+   :nth-child() aqui e no custom.js.
+   ============================================================================ */
+
+
+/* ============================================================================
+   [0] PORTAO DE REVELACAO — o anti-pisco do carregamento
+
+   O PROBLEMA
+   ----------
+   O Homepage injeta o custom.js DEPOIS da hidratacao, nao no HTML servido.
+   Medido no localhost: primeiro paint em 118 ms, custom.js em 163 ms. Nessa
+   janela o navegador ja pintou a tela SEM duas coisas:
+
+     1. a paleta salva no localStorage — sai a paleta padrao (marinho), e o
+        <html> ainda nao tem a classe "dark", entao sai tambem no modo claro;
+     2. o conversor de unidade da memoria — se o dado do widget chegar antes do
+        custom.js, o valor e pintado em GiB e so depois vira GB.
+
+   Pelo IP local a janela e de ~45 ms. Por Tailscale, ou no celular, e bem
+   maior — e foi assim que os dois piscos apareceram.
+
+   A SOLUCAO
+   ---------
+   Nao pintar o conteudo antes de saber a paleta. Enquanto o <html> nao tiver
+   data-pronto, o conteudo e as camadas de fundo ficam em opacity 0 e so o
+   <html> pinta, com um cinza NEUTRO — de proposito sem relacao com nenhuma
+   paleta, para ler como "carregando" e nao como "paleta errada". O custom.js
+   marca data-pronto depois de aplicar a paleta, esperar o tema assentar e
+   ligar o conversor; ai o conteudo aparece com um fade curto.
+
+   Nao e possivel eliminar a espera em vez de esconde-la: CSS nao le
+   localStorage, e nao ha como rodar JS antes do primeiro paint sem alterar a
+   imagem do container.
+
+   POR QUE AS BARRAS CONTINUAM ANIMANDO
+   ------------------------------------
+   A revelacao acontece assim que a paleta e conhecida (~165 ms), ANTES de o
+   dado dos widgets chegar (~540 ms) — as barras ainda sobem do zero, com a
+   transicao de 1 s do proprio Homepage. Se num cliente lento o dado chegar
+   primeiro, o custom.js refaz a animacao na revelacao (secao [C] do custom.js).
+
+   SE O JAVASCRIPT MORRER
+   ----------------------
+   A animacao pl-failsafe revela tudo em 1,4 s mesmo sem custom.js. O painel
+   fica com a paleta padrao e a memoria em GiB — degradado, mas visivel. E o
+   unico motivo pelo qual esta secao usa animation em vez de so opacity.
+   ============================================================================ */
+
+/* durante a espera: so o <html> pinta, num neutro sem paleta */
+:root:not([data-pronto]) {
+  background-color: #0e1218 !important;
+}
+@media (prefers-color-scheme: light) {
+  /* acompanha o escurecimento do tema claro, para a revelacao nao clarear */
+  :root:not([data-pronto]) { background-color: #e6e9f0 !important; }
+}
+
+/* conteudo, camadas de fundo e seletor de paleta: invisiveis ate a revelacao.
+   #pl-switcher entra na lista porque o custom.js o pendura no <body>, fora do
+   #__next, e portanto ele nao herda a opacidade daquele. */
+:root:not([data-pronto]) #__next,
+:root:not([data-pronto]) #pl-switcher,
+:root:not([data-pronto]) body::before,
+:root:not([data-pronto]) body::after {
+  opacity: 0;
+  animation: pl-failsafe 240ms linear 1400ms forwards;
+}
+
+/* revelado */
+:root[data-pronto] #__next,
+:root[data-pronto] #pl-switcher {
+  opacity: 1;
+  transition: opacity 260ms ease;
+}
+:root[data-pronto] body::before { opacity: 1;   transition: opacity 420ms ease; }
+:root[data-pronto] body::after  { opacity: 0.5; transition: opacity 420ms ease; }
+/*                                        ^^^ mesmo valor da secao [3] */
+
+@keyframes pl-failsafe { to { opacity: 1; } }
+
+
+/* ============================================================================
+   [1] PALETAS
+   Rampa 50 (mais claro) -> 900 (mais escuro), em triplas "R G B".
+   A rampa serve aos dois modos: no escuro o Homepage usa dark:text-theme-200
+   (texto claro) sobre dark:bg-theme-800; no claro inverte para text-theme-800
+   sobre bg-theme-50. Manter a rampa monotonica preserva os dois.
+   ============================================================================ */
+
+/* Floresta — marrom, verde musgo e ferrugem */
+:root[data-paleta="floresta"] {
+  --color-50:  247 244 236;
+  --color-100: 237 232 217;
+  --color-200: 216 208 185;
+  --color-300: 183 172 140;
+  --color-400: 145 135 102;
+  --color-500: 112 106  75;
+  --color-600:  86  82  57;
+  --color-700:  62  53  39;
+  --color-800:  43  36  27;
+  --color-900:  26  21  16;
+  --pl-acc:  184  89  38;   /* ferrugem */
+  --pl-acc2: 126 150  86;   /* musgo */
+}
+
+/* Prata — prateado com azul claro */
+:root[data-paleta="prata"] {
+  --color-50:  248 250 252;
+  --color-100: 240 245 250;
+  --color-200: 220 232 242;
+  --color-300: 193 209 223;
+  --color-400: 155 174 191;
+  --color-500: 117 139 159;
+  --color-600:  89 108 127;
+  --color-700:  63  77  93;
+  --color-800:  41  51  63;
+  --color-900:  22  28  37;
+  --pl-acc:  125 199 235;   /* azul claro */
+  --pl-acc2: 203 214 226;   /* prata */
+}
+
+/* Ametista — roxo escuro e roxo claro */
+:root[data-paleta="ametista"] {
+  --color-50:  250 245 255;
+  --color-100: 243 232 255;
+  --color-200: 229 211 253;
+  --color-300: 206 174 250;
+  --color-400: 173 129 240;
+  --color-500: 142  93 219;
+  --color-600: 112  65 184;
+  --color-700:  81  45 136;
+  --color-800:  52  28  90;
+  --color-900:  29  14  54;
+  --pl-acc:  187 141 255;
+  --pl-acc2: 237 201 255;
+}
+
+/* Carmim — vermelho sangue e preto */
+:root[data-paleta="carmim"] {
+  --color-50:  255 245 245;
+  --color-100: 254 232 232;
+  --color-200: 252 206 206;
+  --color-300: 246 161 161;
+  --color-400: 227 101 101;
+  --color-500: 197  47  47;
+  --color-600: 156  27  27;
+  --color-700: 113  19  19;
+  --color-800:  59  13  13;
+  --color-900:  18  10  10;
+  --pl-acc:  221  39  39;
+  --pl-acc2: 249 114 114;
+}
+
+/* Marinho — branco e azul marinho  (paleta padrao, ver secao [2]) */
+:root[data-paleta="marinho"] {
+  --color-50:  255 255 255;
+  --color-100: 244 247 252;
+  --color-200: 227 235 247;
+  --color-300: 195 210 233;
+  --color-400: 144 167 205;
+  --color-500:  93 121 171;
+  --color-600:  59  85 134;
+  --color-700:  35  56  98;
+  --color-800:  19  34  67;
+  --color-900:   8  16  38;
+  --pl-acc:   93 150 233;
+  --pl-acc2: 226 236 250;
+}
+
+/* Solar — ambar e laranja sobre grafite */
+:root[data-paleta="solar"] {
+  --color-50:  255 251 240;
+  --color-100: 254 246 225;
+  --color-200: 253 235 187;
+  --color-300: 250 211 131;
+  --color-400: 245 177  63;
+  --color-500: 225 141  25;
+  --color-600: 181 107  17;
+  --color-700:  93  69  33;
+  --color-800:  46  41  37;
+  --color-900:  23  21  19;
+  --pl-acc:  252 177  53;
+  --pl-acc2: 255 215 121;
+}
+
+/* Ciberdeck — ciano neon sobre azul noite */
+:root[data-paleta="ciberdeck"] {
+  --color-50:  240 253 255;
+  --color-100: 224 250 254;
+  --color-200: 191 243 251;
+  --color-300: 141 227 241;
+  --color-400:  79 201 223;
+  --color-500:  35 166 197;
+  --color-600:  21 123 155;
+  --color-700:  17  79 105;
+  --color-800:  12  39  59;
+  --color-900:   5  16  28;
+  --pl-acc:   35 225 231;
+  --pl-acc2: 121 246 201;
+}
+
+/* Synthwave — magenta e violeta sobre indigo profundo */
+:root[data-paleta="synthwave"] {
+  --color-50:  253 244 255;
+  --color-100: 250 232 255;
+  --color-200: 245 209 253;
+  --color-300: 236 171 246;
+  --color-400: 221 111 226;
+  --color-500: 197  61 191;
+  --color-600: 153  41 153;
+  --color-700:  97  41 131;
+  --color-800:  45  27  85;
+  --color-900:  20  12  44;
+  --pl-acc:  255  92 201;
+  --pl-acc2: 121 181 255;
+}
+
+
+/* ============================================================================
+   [2] TOKENS DE SUPERFICIE
+   Derivados da rampa + destaques da secao [1]. Escritos uma unica vez: e o que
+   permite acrescentar uma paleta nova mexendo so na secao [1].
+
+   O bloco "html body" tambem e o fallback da paleta "Nativo": ali --pl-acc
+   aponta para var(--color-400), ou seja, segue a cor escolhida no seletor
+   nativo do Homepage em vez de uma cor fixa.
+
+   Sobre a ordem: "html:not(.dark) body" e "html[data-paleta=X] body" tem a
+   mesma especificidade. Nao ha conflito porque as duas familias mexem em
+   propriedades diferentes (rampa/destaque vs superficies). Mantenha assim.
+   ============================================================================ */
+
+:root {
+  /* fallback dos destaques: segue a cor nativa quando nao ha paleta */
+  --pl-acc:  var(--color-400);
+  --pl-acc2: var(--color-300);
+
+  /* superficies do modo escuro */
+  --pl-page:       rgb(var(--color-900));
+  --pl-glass:      rgb(var(--color-800) / 0.42);
+  --pl-glass-hi:   rgb(var(--color-800) / 0.60);
+  /* a faixa do topo fica sobre a mancha mais forte da aurora: vidro mais denso
+     para nao lavar e nao destoar dos cards */
+  --pl-glass-faixa: rgb(var(--color-900) / 0.62);
+  --pl-well:       rgb(var(--color-900) / 0.42);
+  --pl-line:       rgb(var(--pl-acc) / 0.16);
+  --pl-line-hi:    rgb(var(--pl-acc) / 0.42);
+  --pl-sheen:      rgb(255 255 255 / 0.07);
+  --pl-shadow:     0 12px 34px -14px rgb(0 0 0 / 0.62);
+  --pl-shadow-hi:  0 20px 44px -14px rgb(0 0 0 / 0.72);
+  --pl-grid:       rgb(var(--pl-acc) / 0.055);
+  --pl-vinheta:    rgb(0 0 0 / 0.55);
+  --pl-aurora-1:   rgb(var(--pl-acc) / 0.20);
+  --pl-aurora-2:   rgb(var(--pl-acc2) / 0.13);
+  --pl-aurora-3:   rgb(var(--color-600) / 0.34);
+
+  /* geometria e ritmo, comuns aos dois modos */
+  --pl-r-lg: 20px;
+  --pl-r-md: 14px;
+  --pl-r-sm: 9px;
+  --pl-blur: 18px;
+
+  /* Geometria da faixa de recursos, em variaveis porque a secao [7] precisa
+     dela para ancorar o marcador "2" no canto do icone. Mudar o tamanho do
+     icone aqui reposiciona o marcador junto, em vez de deixa-lo solto. */
+  --pl-faixa-pad-x:  0.85rem;   /* padding lateral do bloco */
+  --pl-faixa-icone:  2.34rem;   /* caixa do icone: 1,7rem + 0,32rem de cada lado */
+}
+
+:root:not(.dark) {
+  /* Superficies do modo claro: vidro sobre papel, nao sobre breu.
+
+     Escurecido em set/2026 — a versao anterior partia de --color-100 com vidro
+     em 60% de branco e lia como lavada, quase toda branca. O que mudou:
+
+       fundo    --color-100 -> --color-200, um passo da rampa
+       vidro    menos branco, para o fundo mais escuro aparecer atraves
+       pocos    --color-200 -> --color-300
+       linhas   e vinheta mais presentes, para dar recorte
+
+     Os TEXTOS nao mudaram: seguem em --color-700 (titulos de secao) e
+     --color-900 (valores da faixa e titulo da pagina). Escurecer o fundo sem
+     mexer no texto aumenta o contraste, nao diminui. */
+  --pl-page:       rgb(var(--color-200));
+  --pl-glass:      rgb(255 255 255 / 0.52);
+  --pl-glass-hi:   rgb(255 255 255 / 0.78);
+  --pl-glass-faixa: rgb(255 255 255 / 0.64);
+  --pl-well:       rgb(var(--color-300) / 0.50);
+  --pl-line:       rgb(var(--pl-acc) / 0.34);
+  --pl-line-hi:    rgb(var(--pl-acc) / 0.62);
+  --pl-sheen:      rgb(255 255 255 / 0.66);
+  --pl-shadow:     0 10px 28px -14px rgb(var(--color-900) / 0.34);
+  --pl-shadow-hi:  0 18px 38px -14px rgb(var(--color-900) / 0.40);
+  --pl-grid:       rgb(var(--color-600) / 0.10);
+  --pl-vinheta:    rgb(var(--color-500) / 0.26);
+  --pl-aurora-1:   rgb(var(--pl-acc) / 0.20);
+  --pl-aurora-2:   rgb(var(--pl-acc2) / 0.26);
+  --pl-aurora-3:   rgb(var(--color-400) / 0.38);
+}
+
+/* Paleta padrao para quem chega sem nada salvo no localStorage: a mesma rampa
+   de "marinho", repetida aqui para que exista uma rampa valida antes de o
+   custom.js rodar.
+
+   Isto NAO e mais o que evita o piscar — quem faz isso e o portao da secao [0],
+   que mantem o conteudo invisivel ate a paleta certa estar aplicada. Este bloco
+   continua necessario por dois motivos: e a paleta de fato usada na primeira
+   visita, e e a rampa que vale se o custom.js nao carregar e o failsafe do CSS
+   revelar a tela sozinho. */
+:root:not([data-paleta]) {
+  --color-50:  255 255 255;
+  --color-100: 244 247 252;
+  --color-200: 227 235 247;
+  --color-300: 195 210 233;
+  --color-400: 144 167 205;
+  --color-500:  93 121 171;
+  --color-600:  59  85 134;
+  --color-700:  35  56  98;
+  --color-800:  19  34  67;
+  --color-900:   8  16  38;
+  --pl-acc:   93 150 233;
+  --pl-acc2: 226 236 250;
+}
+
+
+/* Icones "mdi-" e "si-" nao sao <img>: o Homepage os desenha como MASCARA CSS
+   e pinta com um degrade de --color-logo-start -> --color-logo-stop. Essas duas
+   variaveis vem da classe theme-<cor> e eram as unicas da rampa que as paletas
+   aqui nao redefiniam — resultado, o icone mdi- do Painel Wakfu era a unica
+   coisa da tela que continuava seguindo o seletor de cor nativo (hoje removido
+   via "color:" no settings.yaml).
+
+   Hoje nenhum card usa icone mdi-, mas amarrar as duas variaveis a paleta evita
+   que um icone mdi- ou si- adicionado no futuro apareca fora de tom.
+
+   O :not() exclui a paleta "nativo", que por definicao deve deixar passar as
+   cores do proprio Homepage. Especificidade (0,2,0): vence html.theme-slate. */
+:root:not([data-paleta="nativo"]) {
+  --color-logo-start: var(--pl-acc2);
+  --color-logo-stop:  var(--pl-acc);
+}
+
+
+/* ============================================================================
+   [3] FUNDO DA PAGINA
+   Nao ha imagem em settings.yaml, logo o Homepage nao cria a div #background e
+   o fundo fica por conta daqui.
+
+   O ::before leva a aurora (tres manchas radiais em deriva lenta) e o ::after
+   a textura: grade fina, granulado e vinheta. Ambos position:fixed, presos a
+   viewport — a rolagem acontece dentro de #inner_wrapper, entao o fundo fica
+   parado enquanto o conteudo desce.
+
+   O container do conteudo tem z-10 (classe do Homepage), por isso z-index
+   negativo aqui basta para ficar atras de tudo.
+   ============================================================================ */
+
+/* AS TRES CAMADAS DE FUNDO
+
+   O Homepage pinta os tres elementos de uma vez:
+
+     #__next, body, html { background-color: rgb(var(--bg-color)) }
+
+   O #__next tem height:100% e cobre a viewport. Sendo opaco, ele tapava a
+   aurora do body::before (que fica na camada de z-index negativo do
+   empilhamento raiz, abaixo de todo conteudo em fluxo). Por isso o fundo saia
+   como uma cor chapada.
+
+   A divisao passa a ser:
+     html      cor base da paleta
+     body      transparente, so hospeda as duas camadas de textura
+     #__next   transparente
+
+   Os !important aqui sao necessarios: custom.css carrega ANTES do CSS do
+   Homepage, e "#__next" (1 id) empata ou vence os seletores simples daqui. */
+/* SEM transition na cor base, de proposito.
+   O Homepage so acrescenta a classe "dark" ao <html> depois da hidratacao.
+   Antes disso ":root:not(.dark)" casa e a cor base e a clara, ou seja toda
+   carga de pagina faz um flip claro -> escuro. Com transition aqui esse flip
+   virava um esmaecimento longo e visivel. Os cards e a faixa do topo seguem
+   com transition propria, que e o que da suavidade na troca de paleta. */
+html {
+  background-color: var(--pl-page) !important;
+}
+html body,
+html #__next {
+  background-color: transparent !important;
+}
+
+html body::before,
+html body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+}
+
+html body::before {
+  z-index: -2;
+  background:
+    radial-gradient(58vw 46vw at 12% -6%,  var(--pl-aurora-1) 0%, transparent 62%),
+    radial-gradient(52vw 44vw at 88% 6%,   var(--pl-aurora-2) 0%, transparent 60%),
+    radial-gradient(70vw 58vw at 50% 108%, var(--pl-aurora-3) 0%, transparent 66%),
+    linear-gradient(175deg, rgb(var(--color-800) / 0.22) 0%, transparent 28%);
+  animation: pl-aurora 34s ease-in-out infinite alternate;
+}
+
+html body::after {
+  z-index: -1;
+  opacity: 0.5;
+  background-image:
+    /* grade fina */
+    linear-gradient(to right,  var(--pl-grid) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--pl-grid) 1px, transparent 1px),
+    /* granulado: quebra o banding dos gradientes */
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)' opacity='0.42'/%3E%3C/svg%3E"),
+    /* vinheta */
+    radial-gradient(120vw 100vh at 50% 40%, transparent 42%, var(--pl-vinheta) 100%);
+  background-size: 46px 46px, 46px 46px, 160px 160px, cover;
+}
+
+@keyframes pl-aurora {
+  0%   { transform: translate3d(0, 0, 0)          scale(1);    }
+  50%  { transform: translate3d(-2.5%, 1.5%, 0)   scale(1.06); }
+  100% { transform: translate3d(2%, -2%, 0)       scale(1.03); }
+}
+
+/* Rolagem: a barra pertence a #inner_wrapper, nao ao body */
+#inner_wrapper {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(var(--pl-acc) / 0.35) transparent;
+  scroll-behavior: smooth;
+}
+#inner_wrapper::-webkit-scrollbar { width: 10px; }
+#inner_wrapper::-webkit-scrollbar-track { background: transparent; }
+#inner_wrapper::-webkit-scrollbar-thumb {
+  background: rgb(var(--pl-acc) / 0.30);
+  border: 3px solid transparent;
+  border-radius: 99px;
+  background-clip: content-box;
+}
+#inner_wrapper::-webkit-scrollbar-thumb:hover { background: rgb(var(--pl-acc) / 0.55); background-clip: content-box; }
+
+
+/* ============================================================================
+   [4] FAIXA DE RECURSOS DO TOPO — painel de vidro
+
+   Cadeia real do DOM (conferida no HTML servido pela versao 2.2.0):
+
+     #information-widgets
+       > #widgets-wrap
+           > div.widget-container          <- o widget "resources"
+               > div.flex-row.self-center  <- a linha que segura os blocos
+                   > div.information-widget-resource   x6
+           > #information-widgets-right    <- vazio (nenhum widget alinhado a direita)
+
+   ATENCAO: a versao anterior deste arquivo mirava ".information-widget-resources"
+   (no plural). Essa classe NAO existe na 2.2.0 — as duas regras que a usavam
+   eram letra morta, e por isso os blocos ficavam agrupados no centro em vez de
+   distribuidos. Os seletores abaixo usam a cadeia verdadeira.
+   ============================================================================ */
+
+#information-widgets {
+  margin: 1.15rem 1.25rem 0 !important;
+  padding: 0.6rem 0.5rem !important;
+  border: 1px solid var(--pl-line) !important;
+  border-radius: var(--pl-r-lg);
+  background: var(--pl-glass-faixa);
+  backdrop-filter: blur(var(--pl-blur)) saturate(115%);
+  -webkit-backdrop-filter: blur(var(--pl-blur)) saturate(115%);
+  box-shadow: var(--pl-shadow), inset 0 1px 0 var(--pl-sheen);
+  transition: border-color 320ms ease, background-color 320ms ease;
+}
+
+/* o widget de recursos ocupa a faixa inteira */
+#widgets-wrap > .widget-container {
+  flex: 1 1 100% !important;
+  width: 100% !important;
+  max-width: none !important;
+}
+
+/* a linha nasce com align-self:center e largura natural, o que encolhia o
+   conjunto para o meio: esticar e distribuir */
+#widgets-wrap > .widget-container > div {
+  width: 100% !important;
+  align-self: stretch !important;
+  justify-content: space-evenly !important;
+}
+
+/* vazio, nao deve reservar espaco nem forcar quebra de linha */
+#widgets-wrap > #information-widgets-right { flex: 0 1 auto !important; }
+#widgets-wrap > #information-widgets-right:empty { display: none !important; }
+
+
+/* ============================================================================
+   [5] BLOCOS DE RECURSO — chip, icone, valor, barra
+
+   Um bloco:
+     div.information-widget-resource
+       > svg.resource-icon
+       > div                         <- coluna de texto (largura travada)
+           > div                     <- linha rotulo: [valor] [nome]
+           > div.resource-usage      <- trilha da barra
+               > div                 <- preenchimento, com style="width:N%"
+                                        INLINE — nunca mexer em width aqui
+   ============================================================================ */
+
+#information-widgets .information-widget-resource {
+  position: relative;
+  flex: 0 0 auto !important;          /* posicao travada: [6] e [7] dependem dela */
+  margin-right: 0 !important;
+  padding: 0.4rem var(--pl-faixa-pad-x) !important;
+  border: 1px solid transparent;
+  border-radius: var(--pl-r-md);
+  transition: background-color 200ms ease, border-color 200ms ease, transform 200ms ease;
+}
+#information-widgets .information-widget-resource:hover {
+  background: rgb(var(--pl-acc) / 0.09);
+  border-color: var(--pl-line);
+  transform: translateY(-1px);
+}
+
+/* icone em pastilha */
+#information-widgets .resource-icon {
+  /* 1,7rem + 2 x 0,32rem de padding = var(--pl-faixa-icone) = 2,34rem */
+  width: 1.7rem !important;
+  height: 1.7rem !important;
+  flex-shrink: 0;
+  padding: 0.32rem;
+  box-sizing: content-box;
+  border-radius: var(--pl-r-sm);
+  background: rgb(var(--pl-acc) / 0.13);
+  color: rgb(var(--pl-acc)) !important;
+  box-shadow: inset 0 0 0 1px rgb(var(--pl-acc) / 0.18);
+}
+
+/* coluna de texto com largura FIXA: impede o bloco de mudar de tamanho
+   conforme o valor exibido (99% vs 100%, 1,2 TB vs 940 GB) */
+#information-widgets .information-widget-resource > div {
+  min-width: 7.6rem !important;
+  width: 7.6rem !important;
+  margin-left: 0.7rem !important;
+}
+
+/* linha do rotulo */
+#information-widgets .information-widget-resource > div > div:first-child {
+  align-items: baseline;
+  gap: 0.4rem !important;
+  font-size: 0.92rem !important;
+  font-variant-numeric: tabular-nums;   /* digitos de mesma largura */
+}
+/* valor */
+#information-widgets .information-widget-resource > div > div:first-child > div:first-child {
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  color: rgb(var(--color-900)) !important;
+}
+html.dark #information-widgets .information-widget-resource > div > div:first-child > div:first-child {
+  color: rgb(var(--color-100)) !important;
+}
+/* nome do recurso */
+#information-widgets .information-widget-resource > div > div:first-child > div:last-child {
+  font-size: 0.62rem !important;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  opacity: 0.62;
+}
+
+/* barra */
+#information-widgets .resource-usage {
+  height: 3px !important;
+  margin-top: 0.4rem !important;
+  border-radius: 99px !important;
+  overflow: hidden;
+  background: rgb(var(--color-500) / 0.22) !important;
+}
+/* O preenchimento recebe a largura por style inline (0..100%) — nunca mexer
+   em width aqui.
+
+   O degrade e ancorado em rem, e nao na largura do elemento: a coluna de texto
+   tem 7,6rem, entao 8rem cobre a trilha inteira. Se o degrade fosse relativo ao
+   elemento, um preenchimento curto (CPU em 30%) mostraria so o primeiro tom e
+   sairia quase invisivel contra a trilha. Comeca saturado por isso. */
+#information-widgets .resource-usage > div {
+  height: 3px !important;
+  border-radius: 99px !important;
+  background-image: linear-gradient(90deg,
+                      rgb(var(--pl-acc)) 0,
+                      rgb(var(--pl-acc2)) 8rem) !important;
+  background-repeat: no-repeat !important;
+  box-shadow: 0 0 8px rgb(var(--pl-acc) / 0.55);
+}
+
+
+/* ============================================================================
+   [6] BARRA SOB O UPTIME  — comportamento preservado
+   "resource-usage" e o componente generico de barra, usado por todos os
+   recursos. No uptime o percentual nao significa nada.
+   Uptime e sempre o ULTIMO bloco da linha (ver widgets.yaml).
+   ============================================================================ */
+#information-widgets .information-widget-resource:last-child .resource-usage {
+  display: none !important;
+}
+
+
+/* ============================================================================
+   [7] MARCADOR "2" NO SEGUNDO DISCO (SSD externo) — comportamento preservado
+   Ordem: 1 CPU | 2 Memoria | 3 Disco / | 4 Disco SSD
+
+   O badge vai no bloco, e nao no icone, porque .resource-icon e o proprio
+   <svg> e nao aceita pseudo-elemento.
+
+   POSICAO: canto SUPERIOR DIREITO do icone, centrado na quina.
+
+   Como as coordenadas sao derivadas, e nao medidas a olho:
+
+     left  = padding lateral do bloco + largura da caixa do icone
+           = borda DIREITA do icone
+     top   = 50%, que e o centro vertical do bloco e tambem o centro do icone,
+             porque o bloco e "items-center" e o icone e o item mais alto
+     translate(-50%, calc(-50% - metade da caixa do icone))
+           = sobe do centro do icone ate a quina de cima e centra o badge nela
+
+   O 50% e proposital em vez de um valor fixo: a altura do bloco depende do
+   conteudo da coluna de texto, e ancorar no centro sobrevive a isso.
+   ============================================================================ */
+#information-widgets .information-widget-resource:nth-child(4)::before {
+  content: "2";
+  position: absolute;
+  left: calc(var(--pl-faixa-pad-x) + var(--pl-faixa-icone));
+  top: 50%;
+  transform: translate(-50%, calc(-50% - var(--pl-faixa-icone) / 2));
+  z-index: 2;
+  font-size: 0.6rem;
+  font-weight: 800;
+  line-height: 1;
+  padding: 0.1rem 0.24rem;
+  border-radius: 0.3rem;
+  background: rgb(var(--pl-acc));
+  color: rgb(var(--color-900));
+  /* o anel separa o badge da quina do icone, que tem a mesma cor de destaque */
+  box-shadow: 0 1px 4px rgb(0 0 0 / 0.45),
+              0 0 0 1.5px var(--pl-glass-faixa);
+}
+html:not(.dark) #information-widgets .information-widget-resource:nth-child(4)::before {
+  color: rgb(255 255 255);
+}
+
+
+/* ============================================================================
+   [8] TITULOS DE SECAO + DIVISORIA — comportamento preservado
+   O <h2>.service-group-name mora dentro de um <button> flex; por isso o
+   width:100% (empurra o chevron para a direita) e o ::before entra como
+   item flex, nao como absoluto.
+   ============================================================================ */
+#inner_wrapper .services-group .service-group-name {
+  width: 100%;
+  /* display:flex explicito de proposito. O <h2> do Homepage ja vem com a classe
+     "flex" do Tailwind, mas o titulo da secao "Servidor" e criado pelo
+     custom.js e nao a tem. Sem contexto flex, o ::before da barrinha (que usa
+     flex:0 0 auto + width/height) fica inline e perde a dimensao — a barra
+     simplesmente nao aparecia. Declarando aqui, a regra vale para os cinco
+     titulos sem depender de classe utilitaria nenhuma. */
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding-bottom: 0.5rem;
+  margin: 0.4rem 0 0.6rem;
+  font-size: 0.74rem !important;
+  font-weight: 800 !important;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  color: rgb(var(--color-700)) !important;
+  border-bottom: 1px solid transparent;
+  /* divisoria em degrade: solida no comeco, dissolve no fim */
+  border-image: linear-gradient(90deg,
+                  rgb(var(--pl-acc) / 0.55) 0%,
+                  var(--pl-line) 35%,
+                  transparent 100%) 1;
+}
+html.dark #inner_wrapper .services-group .service-group-name {
+  color: rgb(var(--color-200)) !important;
+}
+
+/* barra de destaque antes do texto */
+#inner_wrapper .services-group .service-group-name::before {
+  content: "";
+  flex: 0 0 auto;
+  width: 3px;
+  height: 0.85em;
+  border-radius: 99px;
+  background: linear-gradient(180deg, rgb(var(--pl-acc)), rgb(var(--pl-acc2)));
+  box-shadow: 0 0 10px rgb(var(--pl-acc) / 0.6);
+}
+
+#inner_wrapper .services-list { row-gap: 0.15rem; }
+
+
+/* ============================================================================
+   [8b] ALINHAMENTO DO TITULO DA SECAO "SERVIDOR"
+
+   O titulo e inserido pelo custom.js (secao [C]) como
+
+       <div id="pl-grupo-servidor" class="services-group">
+         <h2 class="service-group-name">Servidor</h2>
+       </div>
+
+   imediatamente antes de #information-widgets. Por carregar as mesmas classes
+   dos outros grupos, toda a tipografia vem da secao [8] — aqui so se resolve a
+   posicao, porque este no e filho direto de .container e os outros grupos vivem
+   dentro de um contêiner com padding proprio.
+
+   Medido na largura de 1500px:
+       .container ......................... left 107
+       #information-widgets ............... left 127   (margem de 20px)
+       .service-group-name de "MIDIA" ..... left 143, right 1331
+
+   Dai os 2,25rem (36px) de recuo a esquerda, que poem "SERVIDOR" nos mesmos
+   143px de "MIDIA", e os 3,5rem (56px) a direita, que terminam a divisoria onde
+   as outras terminam. Sao offsets relativos ao .container, nao a viewport: nao
+   dependem da largura da tela.
+
+   A faixa perde a margem de cima porque o titulo passou a ocupar aquele espaco.
+   ============================================================================ */
+#inner_wrapper #pl-grupo-servidor {
+  padding: 0 3.5rem 0 2.25rem;
+  margin: 1.15rem 0 0;
+}
+#inner_wrapper #pl-grupo-servidor .service-group-name {
+  margin: 0 0 0.55rem;
+}
+#information-widgets {
+  margin-top: 0 !important;   /* o titulo assumiu o respiro do topo */
+}
+
+
+/* ============================================================================
+   [8c] CABECALHO DA PAGINA: MARCA + TITULO
+
+   O Homepage NAO desenha o "title" do settings.yaml na pagina — aquela chave so
+   alimenta o <title> da aba. E os widgets nativos que serviriam de cabecalho
+   ("greeting" e "logo", de widgets.yaml) sao renderizados DENTRO de
+   #information-widgets, que hoje e o conteudo da secao "Servidor" — o titulo da
+   pagina cairia dentro dela. Por isso o cabecalho e proprio, inserido pelo
+   custom.js (secao [C]) acima de tudo.
+
+   O texto vem de document.title, ou seja de settings.yaml: renomear o painel
+   num lugar so muda a aba E o cabecalho.
+
+   A MARCA — "anel orbital"
+   ------------------------
+   Um anel com nucleo e dois satelites em orbita: um no topo, ligado ao nucleo
+   por um raio, e outro a 45 graus embaixo a direita. Os dois satelites ficam
+   EXATAMENTE sobre o anel — o de 45 graus esta em 16 + r/raiz(2), e nao num
+   valor chutado.
+
+   Nao e arquivo: e um SVG inline, guardado em --pl-marca e aplicado como
+   MASCARA. O desenho entra pelo canal alfa da mascara e a COR vem do
+   background, que e o degrade da paleta. Efeito: a marca acompanha as nove
+   paletas e os dois modos, sem nenhuma imagem no disco e sem volume novo no
+   docker-compose.yml.
+
+   E a mesma tecnica que o Homepage usa nos icones mdi- (ver secao [10b]).
+
+   O raio do anel e 11,8 e nao 11,4 para a tinta ocupar 27,2 das 32 unidades do
+   viewBox — a marca anterior (moldura) ocupava 25,6, e um anel menor pareceria
+   encolhido no mesmo quadro de 2,75rem.
+
+   Para trocar o desenho, so o valor de --pl-marca precisa mudar. Duas regras:
+   usar fill/stroke opacos, porque a mascara le o alfa e nao a cor; e deixar o
+   data URI com apostrofo e sinais de maior/menor percent-encodados, para o
+   url() funcionar tanto com aspas simples quanto duplas.
+   ============================================================================ */
+
+:root {
+  --pl-marca: url("data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Ccircle cx=%2716%27 cy=%2716%27 r=%2711.8%27 fill=%27none%27 stroke=%27black%27 stroke-width=%271.9%27/%3E%3Cpath d=%27M16 16V6.4%27 stroke=%27black%27 stroke-width=%271.6%27 stroke-linecap=%27round%27/%3E%3Ccircle cx=%2716%27 cy=%2716%27 r=%274.2%27/%3E%3Ccircle cx=%2716%27 cy=%274.2%27 r=%272.9%27/%3E%3Ccircle cx=%2724.34%27 cy=%2724.34%27 r=%273%27/%3E%3C/svg%3E");
+}
+
+#inner_wrapper #pl-cabecalho {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  /* mesmo recuo do titulo "Servidor" e dos outros titulos de secao: tudo
+     alinhado na mesma coluna (ver a medicao na secao [8b]) */
+  padding: 0 3.5rem 0 2.25rem;
+  margin: 1.7rem 0 1.35rem;
+}
+
+#inner_wrapper #pl-cabecalho .pl-marca {
+  flex: 0 0 auto;
+  width: 2.75rem;
+  height: 2.75rem;
+  background: linear-gradient(145deg, rgb(var(--pl-acc2)), rgb(var(--pl-acc)));
+  -webkit-mask: var(--pl-marca) no-repeat center / contain;
+          mask: var(--pl-marca) no-repeat center / contain;
+  filter: drop-shadow(0 2px 8px rgb(var(--pl-acc) / 0.35));
+}
+
+#inner_wrapper #pl-cabecalho .pl-titulo {
+  margin: 0;
+  font-size: 1.45rem;
+  font-weight: 650;
+  letter-spacing: -0.015em;
+  line-height: 1.15;
+  color: rgb(var(--color-900));
+}
+html.dark #inner_wrapper #pl-cabecalho .pl-titulo {
+  color: rgb(var(--color-100));
+}
+
+/* a faixa "Servidor" vem logo abaixo: o cabecalho ja deu o respiro do topo */
+#inner_wrapper #pl-grupo-servidor { margin-top: 0; }
+
+
+/* ============================================================================
+   [9] CARDS DE SERVICO
+
+   Estrutura (2.2.0):
+     div.service-card
+       > div.service-title
+           > a.service-icon
+           > a.service-title-text > div.service-name > p.service-description
+           > div.service-tags > button.service-tag > div.docker-status
+       > div.service-container            <- linha de widgets (0..n)
+   ============================================================================ */
+
+#inner_wrapper .service-card {
+  position: relative;
+  margin-bottom: 0.5rem !important;
+  padding: 0.3rem !important;
+  border: 1px solid var(--pl-line) !important;
+  border-radius: var(--pl-r-md) !important;
+  background: var(--pl-glass) !important;
+  backdrop-filter: blur(calc(var(--pl-blur) * 0.7)) saturate(140%);
+  -webkit-backdrop-filter: blur(calc(var(--pl-blur) * 0.7)) saturate(140%);
+  box-shadow: var(--pl-shadow), inset 0 1px 0 var(--pl-sheen) !important;
+  transition: transform 220ms cubic-bezier(0.22, 1, 0.36, 1),
+              border-color 220ms ease,
+              background-color 220ms ease,
+              box-shadow 220ms ease;
+}
+
+/* espinha de destaque na borda esquerda, cresce no hover */
+#inner_wrapper .service-card::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 50%;
+  width: 2px;
+  height: 0;
+  border-radius: 99px;
+  background: linear-gradient(180deg, rgb(var(--pl-acc)), rgb(var(--pl-acc2)));
+  transform: translateY(-50%);
+  transition: height 260ms cubic-bezier(0.22, 1, 0.36, 1);
+  z-index: 5;
+}
+
+/* brilho difuso que acende no hover */
+#inner_wrapper .service-card::after {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  pointer-events: none;
+  opacity: 0;
+  background: radial-gradient(70% 130% at 0% 0%, rgb(var(--pl-acc) / 0.16) 0%, transparent 70%);
+  transition: opacity 240ms ease;
+}
+
+#inner_wrapper .service-card:hover {
+  transform: translateY(-2px);
+  border-color: var(--pl-line-hi) !important;
+  background: var(--pl-glass-hi) !important;
+  box-shadow: var(--pl-shadow-hi), inset 0 1px 0 var(--pl-sheen) !important;
+}
+#inner_wrapper .service-card:hover::before { height: 62%; }
+#inner_wrapper .service-card:hover::after  { opacity: 1; }
+
+/* icone em pastilha */
+#inner_wrapper .service-card .service-icon {
+  width: 3rem !important;
+  border-radius: var(--pl-r-sm);
+  transition: transform 240ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+#inner_wrapper .service-card .service-icon img,
+#inner_wrapper .service-card .service-icon svg {
+  filter: drop-shadow(0 2px 5px rgb(0 0 0 / 0.35));
+}
+#inner_wrapper .service-card:hover .service-icon { transform: scale(1.07); }
+
+/* nome */
+#inner_wrapper .service-card .service-name {
+  padding: 0.45rem 0.55rem !important;
+  font-size: 0.9rem !important;
+  font-weight: 650;
+  letter-spacing: -0.005em;
+  line-height: 1.25;
+}
+
+/* descricao: o texto longo dos cards precisa respirar */
+#inner_wrapper .service-card .service-description {
+  margin-top: 0.16rem;
+  font-size: 0.7rem !important;
+  font-weight: 400 !important;
+  line-height: 1.4;
+  opacity: 0.72;
+  /* deixa espaco para a pastilha de status no canto superior direito */
+  padding-right: 0.2rem;
+}
+
+#inner_wrapper .service-card .service-title-text { border-radius: var(--pl-r-sm); }
+
+/* pastilha de status (docker / ping): o Homepage a ancora no topo direito com
+   cantos rounded-b — virar pastilha solta fica melhor sobre o vidro */
+#inner_wrapper .service-card .service-tags { gap: 0.35rem !important; margin: 0.3rem 0.35rem 0 0 !important; }
+
+#inner_wrapper .service-card .docker-status,
+#inner_wrapper .service-card .ping-status,
+#inner_wrapper .service-card .site-monitor-status {
+  padding: 0.16rem 0.42rem !important;
+  border-radius: 99px !important;
+  background: rgb(var(--color-900) / 0.42) !important;
+  box-shadow: inset 0 0 0 1px rgb(var(--pl-acc) / 0.16);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+html:not(.dark) #inner_wrapper .service-card .docker-status,
+html:not(.dark) #inner_wrapper .service-card .ping-status,
+html:not(.dark) #inner_wrapper .service-card .site-monitor-status {
+  background: rgb(255 255 255 / 0.55) !important;
+}
+/* as cores de estado (verde/laranja/rosa) vem do Homepage e sao INFORMACAO:
+   nao pintar por cima, so espacar melhor */
+#inner_wrapper .service-card .docker-status > div,
+#inner_wrapper .service-card .ping-status > div {
+  letter-spacing: 0.07em;
+}
+
+
+/* ============================================================================
+   [10] BLOCOS DE WIDGET DENTRO DO CARD
+
+   Dois formatos convivem e precisam do mesmo tratamento:
+     .service-block                      -> widgets nativos e customapi "block"
+     .service-container > div > div       -> customapi "dynamic-list" (VPN),
+                                             que nao recebe classe semantica,
+                                             so as utilitarias rounded-sm/m-1
+   ============================================================================ */
+
+#inner_wrapper .service-container { padding: 0 0.1rem 0.1rem; }
+
+#inner_wrapper .service-block,
+#inner_wrapper .service-container > div > div.rounded-sm {
+  margin: 0.16rem !important;
+  padding: 0.34rem 0.4rem !important;
+  border-radius: var(--pl-r-sm) !important;
+  background: var(--pl-well) !important;
+  box-shadow: inset 0 0 0 1px rgb(var(--pl-acc) / 0.10);
+  transition: background-color 200ms ease, box-shadow 200ms ease;
+}
+#inner_wrapper .service-block:hover,
+#inner_wrapper .service-container > div > div.rounded-sm:hover {
+  box-shadow: inset 0 0 0 1px rgb(var(--pl-acc) / 0.28);
+}
+
+/* .service-block: filho 1 = valor (font-thin text-sm), filho 2 = rotulo */
+#inner_wrapper .service-block > div:first-child {
+  font-weight: 600 !important;
+  font-size: 0.86rem !important;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+#inner_wrapper .service-block > div:last-child {
+  margin-top: 0.1rem;
+  font-size: 0.58rem !important;
+  letter-spacing: 0.09em;
+  opacity: 0.6;
+}
+
+/* dynamic-list: rotulo a esquerda (.font-thin), valor a direita (.font-bold) */
+#inner_wrapper .service-container .font-thin { opacity: 0.78; }
+#inner_wrapper .service-container .font-bold { font-variant-numeric: tabular-nums; }
+
+/* destaques de nivel do Homepage (data-highlight-level) continuam funcionando:
+   sao classes proprias dele aplicadas no mesmo elemento */
+
+
+/* ============================================================================
+   [10b] ICONE DO PAINEL WAKFU — as cores da logo do jogo
+
+   O card "Painel Wakfu" usa "icon: mdi-chart-line". Icones mdi- e si- nao sao
+   <img>: o Homepage renderiza um <div> com
+
+       mask: url(<svg do icone>) no-repeat center / contain
+       background: linear-gradient(180deg,
+                     rgb(var(--color-logo-start)), rgb(var(--color-logo-stop)))
+
+   ou seja, o desenho e a mascara e a COR vem do background. Este bloco troca
+   esse background pelo degrade da logo do Wakfu, em valores fixos: o icone
+   deixa de seguir a paleta e passa a ter a cor do jogo, em qualquer paleta e
+   nos dois modos.
+
+   As cores saem da propria logo (wakfu_market_bot/assets/icone/wakfu_simbolo.png),
+   pela media dos pixels opacos em tres faixas de luminancia:
+
+       realce   #a4e5e2   menta claro do traco
+       meio     #57887f   verde-petroleo do corpo
+       contorno #2b443f   usado so na sombra, para dar recorte
+
+   O background e style INLINE do Homepage, por isso o !important — e a unica
+   forma de vencer inline sem alterar a imagem do container.
+
+   O seletor se ancora no aria-label, que o Homepage preenche com o proprio
+   valor de "icon" quando o card tem href (e o caso deste). Trocar o icone no
+   services.yaml faz esta regra simplesmente parar de casar, sem pintar nada
+   errado — falha em silencio, do lado seguro. Se trocar, ajustar o aria-label
+   aqui tambem.
+   ============================================================================ */
+#inner_wrapper .service-icon[aria-label="mdi-chart-line"] > div {
+  background: linear-gradient(180deg,
+                rgb(164 229 226) 0%,
+                rgb(122 186 178) 45%,
+                rgb(87 136 127) 100%) !important;
+  filter: drop-shadow(0 1px 2px rgb(43 68 63 / 0.55));
+}
+
+
+/* ============================================================================
+   [11] CONTROLES DO RODAPE + SELETOR DE PALETA
+
+   O rodape do Homepage e:
+     #footer > #style  (flex, justify-end)
+                 > #color        seletor de cor nativo (w-full, empurra o resto)
+                 > #revalidate   recarregar configuracao
+                 > #theme        claro/escuro
+     #footer > #version
+
+   O seletor de paleta NAO entra aqui: ele e criado pelo custom.js e anexado
+   ao <body>, fora da arvore do React, em posicao fixa no canto inferior
+   esquerdo. Motivo: qualquer no injetado dentro de #style corre o risco de ser
+   removido numa re-renderizacao, e o canto direito ja e ocupado pelo rodape.
+   ============================================================================ */
+
+#footer { padding: 1.25rem 1.5rem 1.5rem !important; }
+
+#style > #color,
+#style > #revalidate,
+#style > #theme,
+#style > #signout {
+  align-self: center !important;
+  border-radius: 99px;
+  transition: background-color 200ms ease, border-color 200ms ease;
+}
+#style > #revalidate,
+#style > #theme,
+#style > #signout {
+  padding: 0.3rem 0.5rem;
+  border: 1px solid var(--pl-line);
+  background: var(--pl-glass-faixa);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+#style > #revalidate:hover,
+#style > #theme:hover,
+#style > #signout:hover {
+  border-color: var(--pl-line-hi);
+  background: var(--pl-glass-hi);
+}
+#style > #theme { margin-left: 0.6rem; }
+#style svg { color: rgb(var(--pl-acc)) !important; }
+
+/* INERTE hoje: "color: slate" no settings.yaml remove o #color da interface.
+   A regra fica porque volta a valer se aquela chave for removida de novo.
+
+   Contexto: o #color nativo e w-full (classe do Homepage) e por isso seu botao renderiza
+   no canto ESQUERDO do rodape, longe dos outros dois — e exatamente onde fica o
+   seletor de paleta. Empurrar so o BOTAO para a direita, mantendo #color com a
+   largura toda: o painel de amostras e "absolute left-0 sm:w-full" ancorado
+   nesse mesmo container, e encolhe-lo esmagaria a grade de 11 colunas. */
+#style > #color > div { justify-content: flex-end !important; }
+
+/* ---------- seletor de paleta ---------- */
+
+#pl-switcher {
+  position: fixed;
+  left: 1.25rem;
+  bottom: 1.25rem;
+  z-index: 60;
+  font-family: var(--font-sans, system-ui, sans-serif);
+  color: rgb(var(--color-800));
+}
+html.dark #pl-switcher { color: rgb(var(--color-100)); }
+
+#pl-switcher .pl-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.42rem 0.7rem;
+  border: 1px solid var(--pl-line);
+  border-radius: 99px;
+  background: var(--pl-glass-faixa);
+  backdrop-filter: blur(12px) saturate(140%);
+  -webkit-backdrop-filter: blur(12px) saturate(140%);
+  box-shadow: var(--pl-shadow), inset 0 1px 0 var(--pl-sheen);
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  transition: border-color 200ms ease, background-color 200ms ease, transform 200ms ease;
+}
+#pl-switcher .pl-btn:hover {
+  border-color: var(--pl-line-hi);
+  background: var(--pl-glass-hi);
+  transform: translateY(-1px);
+}
+#pl-switcher .pl-btn:focus-visible {
+  outline: 2px solid rgb(var(--pl-acc) / 0.7);
+  outline-offset: 2px;
+}
+#pl-switcher .pl-chevron {
+  width: 0.8rem;
+  height: 0.8rem;
+  opacity: 0.6;
+  transition: transform 220ms ease;
+}
+#pl-switcher .pl-btn[aria-expanded="true"] .pl-chevron { transform: rotate(180deg); }
+
+/* amostra de tres cores */
+#pl-switcher .pl-amostra {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+}
+#pl-switcher .pl-amostra i {
+  width: 0.66rem;
+  height: 0.66rem;
+  border-radius: 99px;
+  box-shadow: 0 0 0 1.5px rgb(var(--color-900) / 0.55);
+}
+html:not(.dark) #pl-switcher .pl-amostra i {
+  box-shadow: 0 0 0 1.5px rgb(255 255 255 / 0.85);
+}
+/* sobreposicao leve: as tres cores precisam ser distinguiveis */
+#pl-switcher .pl-amostra i + i { margin-left: -0.12rem; }
+
+/* menu */
+#pl-switcher .pl-menu {
+  position: absolute;
+  left: 0;
+  bottom: calc(100% + 0.55rem);
+  width: 17.5rem;
+  max-height: min(64vh, 30rem);
+  overflow-y: auto;
+  padding: 0.4rem;
+  border: 1px solid var(--pl-line);
+  border-radius: var(--pl-r-md);
+  background: var(--pl-glass-hi);
+  backdrop-filter: blur(20px) saturate(160%);
+  -webkit-backdrop-filter: blur(20px) saturate(160%);
+  box-shadow: var(--pl-shadow-hi);
+  transform-origin: bottom left;
+  scrollbar-width: thin;
+}
+#pl-switcher .pl-menu[hidden] { display: none !important; }
+#pl-switcher .pl-menu:not([hidden]) { animation: pl-sobe 180ms cubic-bezier(0.22, 1, 0.36, 1); }
+
+@keyframes pl-sobe {
+  from { opacity: 0; transform: translateY(6px) scale(0.98); }
+  to   { opacity: 1; transform: translateY(0)   scale(1);    }
+}
+
+#pl-switcher .pl-titulo {
+  padding: 0.35rem 0.5rem 0.45rem;
+  font-size: 0.58rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  opacity: 0.55;
+}
+
+#pl-switcher .pl-opcao {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  width: 100%;
+  padding: 0.45rem 0.5rem;
+  border: 1px solid transparent;
+  border-radius: var(--pl-r-sm);
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+  transition: background-color 150ms ease, border-color 150ms ease;
+}
+#pl-switcher .pl-opcao:hover,
+#pl-switcher .pl-opcao:focus-visible {
+  outline: none;
+  background: rgb(var(--pl-acc) / 0.12);
+  border-color: var(--pl-line);
+}
+#pl-switcher .pl-opcao[aria-selected="true"] {
+  background: rgb(var(--pl-acc) / 0.16);
+  border-color: var(--pl-line-hi);
+}
+#pl-switcher .pl-opcao .pl-textos { display: flex; flex-direction: column; min-width: 0; }
+#pl-switcher .pl-opcao .pl-nome {
+  font-size: 0.78rem;
+  font-weight: 650;
+  line-height: 1.2;
+}
+#pl-switcher .pl-opcao .pl-desc {
+  font-size: 0.62rem;
+  line-height: 1.3;
+  opacity: 0.62;
+}
+#pl-switcher .pl-opcao .pl-check {
+  margin-left: auto;
+  flex: 0 0 auto;
+  width: 0.85rem;
+  height: 0.85rem;
+  opacity: 0;
+  color: rgb(var(--pl-acc));
+}
+#pl-switcher .pl-opcao[aria-selected="true"] .pl-check { opacity: 1; }
+
+
+/* ============================================================================
+   [12] DIALOGO DE BUSCA
+   Nao ha widget "search" em widgets.yaml (a faixa e toda dos recursos), mas o
+   dialogo continua no DOM e abre ao digitar. Vidro, para nao destoar.
+   ============================================================================ */
+#inner_wrapper dialog {
+  border: 1px solid var(--pl-line) !important;
+  border-radius: var(--pl-r-md) !important;
+  background: var(--pl-glass-hi) !important;
+  backdrop-filter: blur(20px) saturate(150%);
+  -webkit-backdrop-filter: blur(20px) saturate(150%);
+  box-shadow: var(--pl-shadow-hi) !important;
+}
+#inner_wrapper dialog input {
+  background: transparent !important;
+  border-bottom-color: var(--pl-line) !important;
+}
+
+
+/* ============================================================================
+   [13] RESPONSIVO E MOVIMENTO REDUZIDO
+   ============================================================================ */
+
+@media (max-width: 640px) {
+  #information-widgets { margin: 0 0.75rem 0 !important; border-radius: var(--pl-r-md); }
+  #inner_wrapper #pl-grupo-servidor { padding: 0 1rem 0 1.1rem; margin-top: 0; }
+  #inner_wrapper #pl-cabecalho {
+    padding: 0 1rem 0 1.1rem;
+    margin: 1rem 0 0.9rem;
+    gap: 0.65rem;
+  }
+  #inner_wrapper #pl-cabecalho .pl-marca { width: 2.1rem; height: 2.1rem; }
+  #inner_wrapper #pl-cabecalho .pl-titulo { font-size: 1.15rem; }
+  #information-widgets .information-widget-resource { padding: 0.35rem 0.55rem !important; }
+  #information-widgets .information-widget-resource > div {
+    min-width: 6.4rem !important;
+    width: 6.4rem !important;
+  }
+  #widgets-wrap > .widget-container > div { justify-content: flex-start !important; }
+
+  #pl-switcher { left: 0.75rem; bottom: 0.75rem; }
+  #pl-switcher .pl-menu { width: min(88vw, 17.5rem); }
+  #pl-switcher .pl-btn .pl-nome-atual { display: none; }  /* so a amostra no celular */
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html body::before { animation: none; }
+  #inner_wrapper { scroll-behavior: auto; }
+  #inner_wrapper .service-card,
+  #inner_wrapper .service-card::before,
+  #inner_wrapper .service-card::after,
+  #inner_wrapper .service-card .service-icon,
+  #information-widgets .information-widget-resource,
+  #pl-switcher .pl-btn,
+  #pl-switcher .pl-chevron { transition: none !important; }
+  #inner_wrapper .service-card:hover { transform: none; }
+  #pl-switcher .pl-menu:not([hidden]) { animation: none; }
+
+  /* o portao da secao [0] continua valendo, mas sem fade */
+  :root[data-pronto] #__next,
+  :root[data-pronto] #pl-switcher,
+  :root[data-pronto] body::before,
+  :root[data-pronto] body::after { transition: none !important; }
+}
