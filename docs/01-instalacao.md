@@ -166,6 +166,40 @@ Assistente inicial cria o usuário administrador. Depois:
 3. **Administração → Client API Tokens**: crie um token com escopo
    `platforms.read roms.read` para o card "Biblioteca (RomM)" do painel.
 
+#### Streaming de emulador (PS2, Dreamcast, 3DS)
+
+O EmulatorJS, que roda no navegador do cliente, não cobre PS2 nem Dreamcast. Esses
+consoles, e o 3DS, rodam no container `romm-webstation`: o emulador executa no
+servidor, com a GPU Intel integrada, e o navegador recebe apenas o vídeo.
+
+1. Gere `ROMM_STREAMING_BROKER_SECRET` no `.env` (`openssl rand -hex 32`); o mesmo
+   valor autentica o RomM junto ao broker do container.
+2. Exponha o container **e o próprio RomM** em HTTPS, restritos à tailnet. O
+   Selkies exige contexto seguro, e o navegador só o concede ao stream (embutido
+   num iframe) se a página do RomM também estiver em HTTPS; aberto por
+   `http://roms.jts`, o stream falha com *"This application requires a secure
+   connection (HTTPS)"*:
+   ```bash
+   tailscale serve --bg --https=8443 http://127.0.0.1:3010   # webstation
+   tailscale serve --bg --https=8444 http://127.0.0.1:8090   # RomM
+   ```
+   Para jogar via streaming, acesse o RomM por
+   `https://<nome-do-servidor>.<tailnet>.ts.net:8444`.
+3. Acrescente ao `config.yml` do RomM o bloco `streaming`, com `host` apontando
+   para `https://<nome-do-servidor>.<tailnet>.ts.net:8443`, `subfolder: /streaming`,
+   `broker_host: http://romm-webstation:3000` e as plataformas `ps2: pcsx2`,
+   `dc: retroarch` e `3ds: retroarch`. O nome do emulador identifica os saves no
+   RomM e não deve ser trocado depois.
+4. Pelo RomM, abra uma **sessão de desktop** no container e configure cada
+   emulador uma vez: o PCSX2 exige a BIOS do PS2; o núcleo Flycast do RetroArch
+   aceita a BIOS do Dreamcast (`dc_boot.bin`, `dc_flash.bin`) em
+   `/config/.config/retroarch/system/dc/`. O 3DS não exige BIOS, mas a ROM precisa
+   estar descriptografada.
+
+O streaming abre apenas arquivos soltos: jogos compactados (`.zip`, `.7z`) precisam
+ser extraídos antes do scan. Jogos de Dreamcast em `.gdi` com várias faixas ficam
+numa subpasta própria, tratada pelo RomM como um único jogo.
+
 ## 5. Preencher as chaves do painel
 
 Com os serviços em execução, colete as API keys (em cada serviço, **Settings → General**)

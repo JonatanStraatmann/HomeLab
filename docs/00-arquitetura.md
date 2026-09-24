@@ -14,8 +14,8 @@ rede incompatíveis entre si:
 - **`arr-stack/`** fica numa rede bridge própria, onde os serviços se enxergam por
   nome de container.
 - **`emulacao/`** também fica numa rede bridge própria, pelo mesmo motivo do
-  `arr-stack`: o RomM só precisa enxergar o próprio banco (`romm-db`), por nome de
-  container.
+  `arr-stack`: o RomM só precisa enxergar o próprio banco (`romm-db`) e o
+  container de streaming (`romm-webstation`), por nome de container.
 
 A consequência prática: o Homepage (em `infra`) e as demais stacks não se enxergam por
 nome. Por isso os widgets do painel usam o IP do host — todos publicam porta nele.
@@ -26,7 +26,7 @@ nome. Por isso os widgets do painel usam o IP do host — todos publicam porta n
 |---|---|---|
 | 53 | `systemd-resolved`, mas só em 127.0.0.53/54 | AdGuard escuta nos IPs reais; não é preciso desabilitar o stub |
 | 443 | `tailscaled` (Serve/Funnel) no IP do Tailscale | Nginx Proxy Manager publica 443 só no IP da LAN |
-| 3000 | AdGuard | Homepage usa 3001 no host, 3000 dentro do container |
+| 3000 | AdGuard | Homepage usa 3001 no host, 3000 dentro do container; `romm-webstation` publica 3010, só em 127.0.0.1, e o acesso externo passa pelo `tailscale serve` na 8443 |
 
 ## Import por hardlink
 
@@ -62,7 +62,7 @@ Por isso o estado gerado pelos containers fica em `APPDATA_ROOT`, no disco de si
 |---|---|---|
 | `jellyfin` | `jellyfin/config`, `jellyfin/cache` | banco da biblioteca, metadados, imagens, `cache/transcodes` |
 | `arr-stack` | `arr-stack/<serviço>/config` | bancos SQLite, logs e backups automáticos de cada serviço |
-| `emulacao` | `emulacao/romm-db/data`, `emulacao/romm/{resources,redis-data,assets}` | banco MariaDB, capas e metadados, fila de tarefas, saves |
+| `emulacao` | `emulacao/romm-db/data`, `emulacao/romm/{resources,redis-data,assets}`, `emulacao/webstation` | banco MariaDB, capas e metadados, fila de tarefas, saves; configuração, BIOS e saves dos emuladores de streaming |
 
 O que é escrito à mão continua no repositório: a configuração do painel, o
 `index.html` e os scripts do Jellyfin e a stack `infra` inteira, cujo estado é

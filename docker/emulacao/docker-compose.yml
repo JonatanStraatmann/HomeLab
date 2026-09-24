@@ -32,6 +32,8 @@ services:
       HASHEOUS_API_ENABLED: "true"
       SCAN_WORKERS: 4
       WEB_SERVER_CONCURRENCY: 4
+      # Segredo compartilhado com o broker do romm-webstation (streaming).
+      STREAMING_BROKER_SECRET: ${ROMM_STREAMING_BROKER_SECRET:?defina ROMM_STREAMING_BROKER_SECRET no .env da raiz, gerada com openssl rand -hex 32}
     volumes:
       # Estado gerado pelo RomM fica em APPDATA_ROOT (disco de sistema). O
       # config.yml fica em ./romm/config, fora do git: o próprio RomM o
@@ -68,3 +70,36 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+
+  # Streaming de emulador: PCSX2, Flycast, Azahar etc. rodam aqui, no
+  # servidor, e o navegador recebe só o vídeo (Selkies). Cobre o que o
+  # EmulatorJS do navegador não emula (PS2, Dreamcast, 3DS). O RomM manda
+  # os comandos de jogo ao romm-broker embutido, pela rede da stack.
+  romm-webstation:
+    # Tag específica para o RomM (webstation + romm-broker), amd64 apenas.
+    image: lscr.io/linuxserver/webstation:romm
+    container_name: romm-webstation
+    restart: unless-stopped
+    environment:
+      PUID: ${PUID:?defina PUID no .env da raiz}
+      PGID: ${PGID:?defina PGID no .env da raiz}
+      TZ: ${TZ:?defina TZ no .env da raiz}
+      SUBFOLDER: /streaming/
+      BROKER_SECRET: ${ROMM_STREAMING_BROKER_SECRET:?defina ROMM_STREAMING_BROKER_SECRET no .env da raiz}
+      # GPU integrada Intel (renderD128). A NVIDIA (renderD129) exigiria o
+      # nvidia-container-toolkit no host.
+      DRINODE: /dev/dri/renderD128
+    devices:
+      - /dev/dri:/dev/dri
+    volumes:
+      # Configuração dos emuladores, BIOS e saves do lado do container.
+      - ${APPDATA_ROOT:?defina APPDATA_ROOT no .env da raiz}/emulacao/webstation:/config
+      # Mesma biblioteca e mesmo caminho do RomM (o broker recusa ROMs fora
+      # de /romm e o library_path padrão do config.yml é /romm/library).
+      - ${ROMS_ROOT:?defina ROMS_ROOT no .env da raiz}:/romm/library:ro
+    ports:
+      # Só localhost: a interface não tem login próprio. O acesso pelo
+      # navegador passa pelo tailscale serve (HTTPS, obrigatório para o
+      # Selkies), restrito à tailnet — ver docs/01-instalacao.md.
+      - "127.0.0.1:3010:3000"
+    shm_size: "1gb"
