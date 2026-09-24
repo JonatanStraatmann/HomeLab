@@ -1,0 +1,69 @@
+# ============================================================================
+# Regra geral: versiona-se o que foi escrito à mão. Tudo que os containers
+# geram sozinhos (bancos, logs, caches, capas, metadados) fica de fora — são
+# 1,5 GB de estado contra ~500 KB de configuração de verdade.
+# ============================================================================
+
+# --- segredos -----------------------------------------------------------
+# ANCORADO na raiz de propósito: o padrão solto ".env" também casaria com os
+# symlinks docker/*/.env, que PRECISAM ser versionados.
+/.env
+!/.env.example
+
+# --- só desta máquina ---------------------------------------------------
+# scripts privilegiados, fragmento de sudoers, baseline SMART (tem o número
+# de série do disco) e o arquivo morto dos .bak antigos
+/local/
+
+# notas de bancada sobre o SSD Netac (numero de serie, testes em andamento) —
+# mesma logica do /local/, so que nasceu solta na raiz
+/Ajustes SSD/
+
+# --- cópias de segurança (contêm segredos de antes da extração) ---------
+*.bak
+*.bak-*
+*.old.json
+*.tar.gz
+
+# --- estado dos containers ----------------------------------------------
+# arr-stack: bancos SQLite, logs, capas (MediaCover), torrents, e os arquivos
+# de config que cada app reescreve sozinho — config.xml tem <ApiKey>,
+# settings.json do Seerr tem as chaves VAPID, o config.yaml do Bazarr tem
+# ~55 campos de credencial.
+/docker/arr-stack/*/config/
+
+# jellyfin: 905 MB de metadados + 242 MB de legendas + 70 MB de cache
+/docker/jellyfin/config/
+/docker/jellyfin/cache/
+
+# adguard: root 0600/0700, o git nem conseguiria ler. O AdGuardHome.yaml
+# reescreve-se sozinho ao parar o container — versionar geraria diff toda hora.
+# O que vale é o exemplo higienizado em docker/infra/adguard/AdGuardHome.example.yaml
+/docker/infra/adguard/conf/
+/docker/infra/adguard/work/
+
+# nginx proxy manager: keys.json é uma chave RSA privada e o database.sqlite
+# guarda o hash bcrypt do admin. Ambos são 0644 root, ou seja, LEGÍVEIS — sem
+# esta regra o git os commitaria sem reclamar.
+/docker/infra/npm/data/
+/docker/infra/npm/letsencrypt/
+
+# homepage: só o que é gerado. ATENÇÃO: uma regra genérica "config/" seria
+# errada aqui — custom.css (53 KB), custom.js (22 KB) e os .yaml escritos à
+# mão vivem dentro de homepage/config/ e são o coração do painel.
+/docker/infra/homepage/config/logs/
+/docker/infra/homepage/backups/
+
+# emulacao (RomM): banco, fila redis, recursos baixados dos provedores de
+# metadados e assets (saves/states) enviados pela interface — mesmo
+# raciocínio do resto do arquivo, é estado gerado pelo container.
+/docker/emulacao/romm/resources/
+/docker/emulacao/romm/redis-data/
+/docker/emulacao/romm/assets/
+/docker/emulacao/romm/config/
+/docker/emulacao/romm-db/data/
+
+# --- ruído de editor e SO ------------------------------------------------
+*.swp
+*~
+.DS_Store

@@ -1,0 +1,103 @@
+# Stack de automacao de midia. O Jellyfin roda separado, em
+# ../jellyfin (network_mode: host, porta 8096).
+#
+# DECISAO DE LAYOUT: todos os servicos montam VIDEO_ROOT como /data.
+# Um unico volume faz o Radarr/Sonarr importarem por HARDLINK em vez de
+# copiar — instantaneo e sem duplicar espaco (exige origem e destino no
+# mesmo sistema de arquivos).
+#
+# O /config de cada servico (bancos SQLite, logs, backups automaticos) fica
+# em APPDATA_ROOT, no disco de sistema, e nao junto da biblioteca: ver
+# docs/00-arquitetura.md.
+
+networks:
+  arr:
+    driver: bridge
+
+x-comum: &comum
+  restart: unless-stopped
+  environment: &env
+    PUID: ${PUID:?defina PUID no .env da raiz}
+    PGID: ${PGID:?defina PGID no .env da raiz}
+    TZ: ${TZ:?defina TZ no .env da raiz}
+  networks:
+    - arr
+
+services:
+  prowlarr:                      # gerencia indexadores e alimenta radarr/sonarr
+    <<: *comum
+    image: lscr.io/linuxserver/prowlarr:latest
+    container_name: prowlarr
+    ports:
+      - "9696:9696"
+    volumes:
+      - ${APPDATA_ROOT:?defina APPDATA_ROOT no .env da raiz}/arr-stack/prowlarr/config:/config
+
+  radarr:                        # filmes
+    <<: *comum
+    image: lscr.io/linuxserver/radarr:latest
+    container_name: radarr
+    ports:
+      - "7878:7878"
+    volumes:
+      - ${APPDATA_ROOT:?defina APPDATA_ROOT no .env da raiz}/arr-stack/radarr/config:/config
+      - ${VIDEO_ROOT:?defina VIDEO_ROOT no .env da raiz}:/data:rshared
+
+  sonarr:                        # series
+    <<: *comum
+    image: lscr.io/linuxserver/sonarr:latest
+    container_name: sonarr
+    ports:
+      - "8989:8989"
+    volumes:
+      - ${APPDATA_ROOT:?defina APPDATA_ROOT no .env da raiz}/arr-stack/sonarr/config:/config
+      - ${VIDEO_ROOT:?defina VIDEO_ROOT no .env da raiz}:/data:rshared
+
+  bazarr:                        # legendas
+    <<: *comum
+    image: lscr.io/linuxserver/bazarr:latest
+    container_name: bazarr
+    ports:
+      - "6767:6767"
+    volumes:
+      - ${APPDATA_ROOT:?defina APPDATA_ROOT no .env da raiz}/arr-stack/bazarr/config:/config
+      - ${VIDEO_ROOT:?defina VIDEO_ROOT no .env da raiz}:/data:rshared
+
+  qbittorrent:                   # cliente de download
+    <<: *comum
+    image: lscr.io/linuxserver/qbittorrent:latest
+    container_name: qbittorrent
+    environment:
+      <<: *env
+      WEBUI_PORT: ${QBT_WEBUI_PORT:?defina QBT_WEBUI_PORT no .env da raiz}
+    ports:
+      - "${QBT_WEBUI_PORT}:${QBT_WEBUI_PORT}"
+      - "6881:6881"
+      - "6881:6881/udp"
+    volumes:
+      - ${APPDATA_ROOT:?defina APPDATA_ROOT no .env da raiz}/arr-stack/qbittorrent/config:/config
+      - ${VIDEO_ROOT:?defina VIDEO_ROOT no .env da raiz}:/data:rshared
+      # Sem diretorio temporario em outro volume: o qBittorrent grava direto em
+      # /data/Downloads, na mesma raiz da biblioteca (ver docs/00-arquitetura.md).
+
+  seerr:                         # antigo Jellyseerr. Em out/2025 o projeto se
+                                 # fundiu com o Overseerr e virou Seerr; a imagem
+                                 # fallenbagel/jellyseerr parou de ser publicada.
+    image: ghcr.io/seerr-team/seerr:latest
+    container_name: seerr
+    init: true                   # exigido pelo Seerr
+    restart: unless-stopped
+    networks:
+      - arr
+    # Sem PUID/PGID: o Seerr roda como o usuario 'node' (uid 1000) por padrao.
+    environment:
+      TZ: ${TZ:?defina TZ no .env da raiz}
+      PORT: 5055
+    ports:
+      - "5055:5055"
+    volumes:
+      - ${APPDATA_ROOT:?defina APPDATA_ROOT no .env da raiz}/arr-stack/seerr/config:/app/config
+    # o Jellyfin usa network_mode:host, entao daqui ele e alcancado
+    # por host.docker.internal:8096
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
