@@ -130,6 +130,44 @@ curl -s -G 'http://localhost:3001/api/services/proxy' \
   --data-urlencode 'endpoint=movie'
 ```
 
+## Stream de emulador falha com "requires a secure connection (HTTPS)"
+
+**Sintoma.** Ao iniciar um jogo por streaming, o emulador abre no container, mas o
+navegador exibe *"Error: This application requires a secure connection (HTTPS)"*.
+
+**Causa.** O stream do Selkies é embutido num iframe da página do RomM e exige contexto
+seguro. O navegador só concede esse contexto ao iframe se a página que o contém também
+estiver em HTTPS; aberto por `http://roms.jts`, o RomM torna o stream inseguro, mesmo
+com o iframe apontando para um endereço HTTPS.
+
+**Solução.** Acessar o RomM pelo endereço HTTPS do `tailscale serve` (porta 8444),
+descrito em [01-instalacao.md](01-instalacao.md).
+
+## ROM de 3DS "descriptografada" é recusada como criptografada
+
+**Sintoma.** O streaming de 3DS não inicia; o núcleo Azahar registra *"This ROM is
+encrypted and must be decrypted before use with Azahar"*, embora o arquivo tenha sido
+distribuído como descriptografado.
+
+**Causa.** Ferramentas antigas descriptografavam o conteúdo sem ligar o bit
+`NoCrypto` do cabeçalho NCCH. O Azahar decide pelo cabeçalho, não pelo conteúdo.
+
+**Solução.** Se o conteúdo estiver de fato em claro, ligar o bit com
+`docker/emulacao/ferramentas/corrige-nocrypto-3ds.py "<arquivo>.3ds"`. O script altera
+apenas 8 bytes por partição e recusa o arquivo se o cabeçalho estendido não estiver
+legível (conteúdo realmente criptografado).
+
+## Arquivo excluído pela interface do RomM passa a ser ignorado
+
+**Sintoma.** Um jogo recolocado na biblioteca não aparece após o scan.
+
+**Causa.** Ao excluir um jogo pela interface, o RomM acrescenta o nome do arquivo a
+`exclude.roms.single_file.names` no `config.yml`. Um arquivo com o mesmo nome é
+ignorado em silêncio nos scans seguintes.
+
+**Solução.** Remover o nome da lista de exclusão no `config.yml` (via `docker exec`,
+ver [00-arquitetura.md](00-arquitetura.md)) ou recolocar o arquivo com outro nome.
+
 ## Biblioteca em disco externo NTFS
 
 Os itens desta seção não se aplicam à configuração atual, em que a biblioteca reside
