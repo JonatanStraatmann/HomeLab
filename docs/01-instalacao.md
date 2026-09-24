@@ -196,6 +196,11 @@ servidor, com a GPU Intel integrada, e o navegador recebe apenas o vídeo.
    `/config/.config/retroarch/system/dc/`. O 3DS não exige BIOS, mas a ROM precisa
    estar descriptografada.
 
+O container é **sob demanda**: ligue-o pela chave do card "Streaming de jogos" do
+painel antes de jogar; ele se desliga sozinho após 30 minutos sem sessão. O mecanismo
+(rotas do `painel-status.py`, temporizador `streaming-ocioso` e exceção no
+`verifica-containers`) está descrito em [02-painel.md](02-painel.md).
+
 O streaming abre apenas arquivos soltos: jogos compactados (`.zip`, `.7z`) precisam
 ser extraídos antes do scan. Jogos de Dreamcast em `.gdi` com várias faixas ficam
 numa subpasta própria, tratada pelo RomM como um único jogo.

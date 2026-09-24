@@ -102,6 +102,31 @@
           key: {{HOMEPAGE_VAR_ROMM_KEY}}
           fields: ["platforms", "totalRoms", "saves", "states"]
 
+    - Streaming de jogos:
+        # O card inteiro abre o RomM em HTTPS (exigido pelo stream); a chave
+        # sob a pastilha de status liga e desliga o romm-webstation, via
+        # painel-status (porta 8099) — ver custom.js [E]. Desligamento
+        # automatico apos 30 min sem jogo (streaming-ocioso). Nome Tailscale em
+        # vez do IP da LAN: o link abre no navegador do cliente, que pode estar
+        # fora de casa. O custom.js tambem deriva deste href o endereco do
+        # painel-status: mudar o host aqui muda la.
+        href: https://{{HOMEPAGE_VAR_TS_HOSTNAME}}:8444
+        description: PS2, Dreamcast e 3DS rodando no servidor
+        icon: mdi-gamepad-variant
+        server: local
+        container: romm-webstation
+        widget:
+          type: customapi
+          url: http://{{HOMEPAGE_VAR_LAN_IP}}:8099/streaming
+          refreshInterval: 15000
+          display: block
+          # Um campo so, com o texto pronto do painel-status ("desliga em X
+          # min", "desligada", "jogando Y"). O custom.js [E] poe a chave como
+          # bloco da esquerda.
+          mappings:
+            - field: situacao
+              label: Situação
+
 - Infraestrutura:
     - VPN (Tailscale):
         description: Aparelhos conectados a rede Tailscale neste momento

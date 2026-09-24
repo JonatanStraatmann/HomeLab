@@ -588,7 +588,7 @@ widgets do Homepage funcionam. O arquivo está em `chmod 600`. Manter assim.
 
 ## Widgets que dependem de serviço externo
 
-Dois cards não usam widget nativo, e sim um serviço criado à mão:
+Três cards não usam widget nativo, e sim um serviço criado à mão:
 
 ```
 ~/.local/bin/painel-status.py          servidor HTTP em 0.0.0.0:8099
@@ -599,6 +599,35 @@ Dois cards não usam widget nativo, e sim um serviço criado à mão:
 |---|---|
 | `http://$LAN_IP:8099/vpn` | card "VPN (Tailscale)" — dispositivos conectados |
 | `http://$LAN_IP:8099/wakfu` | card "Painel Wakfu" — última e próxima coleta |
+| `http://$LAN_IP:8099/streaming` | card "Streaming de jogos" — campo `situacao`, já em texto: "desliga em X min", "desligada", "jogando Y" ou "ligando..." (os campos `estado`, `jogo` e `desliga` servem à chave) |
+| `POST http://<nome-tailscale>:8099/streaming/liga` e `/desliga` | chave liga/desliga do mesmo card (`custom.js` seção [E], estilo em `custom.css` [10c]); aceitos só quando a origem é o próprio painel (os endereços de `HOMEPAGE_ALLOWED_HOSTS`) |
+| `http://<nome-tailscale>:8099/streaming/ligar` | alternativa por link: com o container pronto, redireciona ao RomM; desligado, liga e exibe uma página de espera que redireciona sozinha |
+
+No card, o widget tem dois blocos: a chave, à esquerda, e a situação. A chave é
+um `.service-block` como o outro bloco, com o mesmo fundo e contorno, e os
+ícones da chave de tema do rodapé, sem rótulo. Um clique em qualquer outra
+parte do card abre o RomM em HTTPS (porta 8444), exigido pelo stream. O
+endereço do `painel-status` é derivado do `href` do card, trocando a porta por
+8099, de modo que nenhum nome de máquina fica escrito no `custom.js`.
+
+O `romm-webstation` é **sob demanda**: parado não consome recursos, e ligado sem
+uso ocupa cerca de 850 MB de RAM. A chave do card o liga e desliga; além disso, o desligamento é automático,
+após 30 minutos sem sessão de jogo, por um temporizador próprio:
+
+```
+~/.local/bin/streaming-ocioso.py        confere a sessão no broker e dá docker stop
+~/.config/systemd/user/streaming-ocioso.{service,timer}   a cada 5 min
+~/.local/state/streaming-ocioso         desde quando o container está ocioso
+```
+
+A sessão é consultada no broker (`/streaming/api/session/status`), que exige o
+segredo `ROMM_STREAMING_BROKER_SECRET`; os dois scripts o leem do `.env` a cada
+consulta. A label `homelab.sob-demanda: "true"`, no compose, faz o
+`verifica-containers` ignorar o container quando parado — sem ela, ele o
+religaria a cada 30 minutos por considerá-lo quebrado.
+
+O link usa o nome Tailscale do servidor (`HOMEPAGE_VAR_TS_HOSTNAME`), e não o IP da
+LAN, porque é aberto no navegador do cliente, que pode estar fora de casa.
 
 O card "Biblioteca (RomM)" é widget nativo (`type: romm`) e não depende deste serviço.
 

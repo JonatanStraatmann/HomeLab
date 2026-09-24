@@ -73,6 +73,7 @@
    [9]  cards de servico
    [10] blocos de widget dentro do card
    [10b] icone do Painel Wakfu: as cores da logo do jogo
+   [10c] chave liga/desliga do card "Streaming de jogos"
    [11] controles do rodape + seletor de paleta
    [12] dialogo de busca
    [13] responsivo e movimento reduzido
@@ -1118,6 +1119,93 @@ html:not(.dark) #inner_wrapper .service-card .site-monitor-status {
 
 
 /* ============================================================================
+   [10c] CHAVE LIGA/DESLIGA DO CARD "STREAMING DE JOGOS"
+
+   Par da secao [E] do custom.js, que insere um <button role="switch"
+   class="pl-chave service-block ..."> como PRIMEIRO bloco do widget e marca o
+   <li> com .pl-card-streaming. Sao dois blocos, chave | situacao, que dividem
+   a largura sozinhos (flex-1).
+
+   Fundo, contorno e realce ao passar o mouse NAO estao aqui: vem da secao
+   [10], porque o botao e um .service-block como o outro bloco. Esta secao so
+   cuida do que e proprio da chave:
+     - zerar o estilo nativo de <button> (fonte, cor, borda) que o [10] nao
+       cobre;
+     - os icones, com o desenho e as cores da chave de tema do rodape (#theme,
+       secao [11]): energia | chave | controle, na cor de destaque --pl-acc,
+       no lugar de sol | chave | lua. Sem rotulo embaixo, eles ocupam a altura
+       do bloco e se espalham com espacos iguais (space-evenly): chave de
+       40 px e icones laterais de 24 px;
+     - ALTURA: os icones saem do fluxo (position: absolute, inset: 0), entao
+       nao contam para a altura. Quem define a altura da linha e o bloco
+       "Situacao" (valor + rotulo), e os dois ficam com os mesmos 45 px dos
+       blocos de outros widgets. Cabe porque o desenho da chave de 40 px so
+       ocupa ~17 px de altura (o viewBox do Material Design tem folga vertical);
+     - LARGURA: a area dos icones tem max-width de 11rem. Em blocos largos
+       (poucas colunas, telas grandes) os icones param de se afastar e ficam
+       agrupados no centro;
+     - o bloco tem um filho so, e a secao [10] trata o mesmo <div> como valor
+       (:first-child) E rotulo (:last-child) — este ultimo com opacidade 0,6,
+       que apagaria a chave. Anulado abaixo;
+     - desligado, o SVG da chave e espelhado (o toggle_off do Material Design
+       e o espelho exato do toggle_on); na transicao, ele pulsa.
+   ============================================================================ */
+#inner_wrapper .pl-card-streaming .service-card { cursor: pointer; }
+
+#inner_wrapper .pl-chave {
+  position: relative;                /* referencia dos icones absolutos */
+  appearance: none;
+  border: 0;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+#inner_wrapper .pl-chave:disabled { cursor: progress; }
+#inner_wrapper .pl-chave:focus-visible {
+  outline: 2px solid rgb(var(--pl-acc) / 0.7);
+  outline-offset: 1px;
+}
+
+/* seletor reforcado de proposito: o do [10] (#inner_wrapper .service-block >
+   div:last-child) pesa (1,2,1) e venceria um (1,2,0) */
+#inner_wrapper .pl-chave.service-block > div.pl-chave-icones {
+  position: absolute;
+  inset: 0;
+  max-width: 11rem;                  /* teto do espacamento em blocos largos */
+  margin: 0 auto;                    /* centraliza quando o teto atua; anula o
+                                        margin-top do :last-child do [10] */
+  display: flex;
+  align-items: center;
+  justify-content: space-evenly;
+  opacity: 1;                        /* anula o :last-child do [10] */
+  color: rgb(var(--pl-acc));
+}
+#inner_wrapper .pl-chave svg { display: block; flex: 0 0 auto; }
+#inner_wrapper .pl-chave .pl-chave-lado { width: 1.5rem; height: 1.5rem; }     /* 24 px */
+#inner_wrapper .pl-chave .pl-chave-meio {
+  width: 2.5rem;                     /* 40 px */
+  height: 2.5rem;
+  transition: transform 200ms ease;
+}
+
+/* Bloco "Situacao": "jogando <nome do jogo>" pode ser longo; corta com
+   reticencias em vez de alargar o bloco ou quebrar em varias linhas. */
+#inner_wrapper .pl-card-streaming .service-block:not(.pl-chave) { min-width: 0; }
+#inner_wrapper .pl-card-streaming .service-block:not(.pl-chave) > div:first-child {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+#inner_wrapper .pl-chave[aria-checked="false"] .pl-chave-meio { transform: scaleX(-1); }
+
+#inner_wrapper .pl-chave[data-transicao] .pl-chave-meio {
+  animation: pl-chave-pulso 0.9s ease-in-out infinite;
+}
+@keyframes pl-chave-pulso { 50% { opacity: 0.35; } }
+
+
+/* ============================================================================
    [11] CONTROLES DO RODAPE + SELETOR DE PALETA
 
    O rodape do Homepage e:
@@ -1374,6 +1462,8 @@ html:not(.dark) #pl-switcher .pl-amostra i {
   #information-widgets .information-widget-resource,
   #pl-switcher .pl-btn,
   #pl-switcher .pl-chevron { transition: none !important; }
+  #inner_wrapper .pl-chave .pl-chave-meio { transition: none !important; }
+  #inner_wrapper .pl-chave[data-transicao] .pl-chave-meio { animation: none; opacity: 0.6; }
   #inner_wrapper .service-card:hover { transform: none; }
   #pl-switcher .pl-menu:not([hidden]) { animation: none; }
 

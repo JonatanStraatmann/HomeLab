@@ -5,6 +5,7 @@
    [B] seletor de paletas de cor
    [C] cabecalho da pagina + titulo da secao "Servidor"
    [D] portao de revelacao — libera a tela so quando [A] a [C] estao prontos
+   [E] chave liga/desliga do card "Streaming de jogos"   (independente de [A]-[D])
 
    O Homepage injeta este arquivo DEPOIS da hidratacao do React, nao no HTML
    servido. Medido: primeiro paint em 118 ms, este arquivo em 163 ms. Nessa
@@ -541,3 +542,189 @@
   });
   obs.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
 })();
+
+
+/* ============================================================================
+   [E] CHAVE LIGA/DESLIGA DO CARD "STREAMING DE JOGOS"
+
+   O container de streaming (romm-webstation) e sob demanda: parado nao gasta
+   nada, ligado e ocioso segura ~850 MB de RAM. Esta secao poe uma chave como
+   bloco da esquerda do widget (chave | situacao) e torna o resto do card um
+   link para o RomM em HTTPS.
+
+   DE ONDE VEM CADA COISA
+   ----------------------
+   - O Homepage nao tem widget de chave; a chave e um <button role="switch">
+     inserido aqui. Ele leva a classe .service-block, entao herda da secao
+     [10] do custom.css o mesmo fundo e contorno do bloco "Situacao", e os
+     dois dividem a largura sozinhos (flex-1). Sem rotulo: os icones ocupam
+     a altura do bloco. Eles repetem a chave de tema claro/escuro do rodape;
+     o que for proprio da chave esta na secao [10c].
+   - O estado e as acoes vem do painel-status (~/.local/bin/painel-status.py,
+     porta 8099, fora do repositorio): GET /streaming e POST /streaming/liga |
+     /streaming/desliga. O servico so aceita os POST quando a origem e o proprio
+     painel (os mesmos enderecos de HOMEPAGE_ALLOWED_HOSTS).
+   - O endereco do painel-status sai do href do card (o host Tailscale,
+     definido no services.yaml via HOMEPAGE_VAR_TS_HOSTNAME), trocando a porta
+     por 8099. Assim nenhum nome de maquina fica escrito neste arquivo.
+
+   CLIQUE NO CARD
+   --------------
+   So o icone e o titulo sao <a> no HTML do Homepage; a area dos blocos do
+   widget nao e clicavel. O listener abaixo abre o mesmo href a partir de
+   qualquer ponto do card, exceto o bloco da chave (que inteiro liga/desliga)
+   e a pastilha de status (esta abre as estatisticas do container,
+   comportamento nativo preservado).
+
+   RISCO DE REACT
+   --------------
+   O bloco da chave vive dentro de .service-container, ao lado dos blocos que
+   o React renderiza. O React so move os nos que ele criou (usando os proprios
+   nos como referencia), entao um no estranho na frente nao o atrapalha; mas
+   ele pode recriar o card inteiro (troca de layout, busca). O
+   MutationObserver reinsere a chave quando ela some; o pior caso e a chave
+   piscar, sem efeito no container.
+   ============================================================================ */
+(function () {
+  "use strict";
+
+  var NOME_CARD = "Streaming de jogos";
+  var INTERVALO = 10000;          /* ms entre leituras de estado, com a aba visivel */
+  var INTERVALO_TRANSICAO = 2000; /* ms enquanto liga/desliga */
+
+  /* Mesmo desenho da chave de tema claro/escuro do rodape (#theme): icone do
+     estado "desligado" a esquerda, a chave do Material Design no meio e o
+     estado "ligado" a direita. O Homepage troca o SVG da chave entre
+     toggle_on e toggle_off; aqui ha um SVG so (toggle_on), espelhado pelo CSS
+     quando desligado (secao [10c]) — o toggle_off e exatamente o espelho. */
+  function svg(d, classe) {
+    return '<svg class="' + classe + '" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">' +
+           '<path d="' + d + '"></path></svg>';
+  }
+  var ICONE_DESLIGADO = svg("M13 3h-2v10h2V3zm4.83 2.17l-1.42 1.42A6.92 6.92 0 0 1 19 12c0 3.87-3.13 7-7 7s-7-3.13-7-7c0-2.19 1.01-4.14 2.58-5.42L6.17 5.17A8.93 8.93 0 0 0 3 12a9 9 0 0 0 18 0c0-2.74-1.23-5.18-3.17-6.83z", "pl-chave-lado");
+  var ICONE_CHAVE = svg("M17 7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h10c2.76 0 5-2.24 5-5s-2.24-5-5-5m0 8c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3", "pl-chave-meio");
+  var ICONE_LIGADO = svg("M21 6H3c-1.1 0-2 .9-2 2v8c0 1.1.9 2 2 2h18c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm-10 7H8v3H6v-3H3v-2h3V8h2v3h3v2zm4.5 2c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zm4-3c-.83 0-1.5-.67-1.5-1.5S18.67 9 19.5 9s1.5.67 1.5 1.5-.67 1.5-1.5 1.5z", "pl-chave-lado");
+
+  var estado = null;              /* ultimo JSON de /streaming */
+  var ocupado = false;            /* POST em andamento */
+  var timer = null;
+
+  function card() {
+    return document.querySelector('li.service[data-name="' + NOME_CARD + '"]');
+  }
+
+  function destino(li) {
+    var a = li && li.querySelector("a.service-title-text[href]");
+    return a ? a.getAttribute("href") : "";
+  }
+
+  function api(li) {
+    try {
+      var u = new URL(destino(li));
+      return "http://" + u.hostname + ":8099/streaming";
+    } catch (e) { return ""; }
+  }
+
+  function ligadoDe(e) {
+    return !!e && e.estado !== "desligado";
+  }
+
+  function pinta() {
+    var li = card();
+    var chave = li && li.querySelector(".pl-chave");
+    if (!chave) return;
+    var transicao = ocupado || (estado && estado.estado === "ligando");
+    var ligado = ocupado ? chave.getAttribute("aria-checked") === "true" : ligadoDe(estado);
+    chave.setAttribute("aria-checked", ligado ? "true" : "false");
+    chave.toggleAttribute("data-transicao", !!transicao);
+    chave.disabled = !!ocupado || !estado;
+    var rotulo = !estado ? "Streaming: sem resposta do servidor"
+               : transicao ? (ligado ? "Streaming: ligando..." : "Streaming: desligando...")
+               : ligado ? "Streaming ligado — clique para desligar"
+               : "Streaming desligado — clique para ligar";
+    chave.title = rotulo;
+    chave.setAttribute("aria-label", rotulo);
+  }
+
+  function agenda(ms) {
+    clearTimeout(timer);
+    timer = setTimeout(le, ms);
+  }
+
+  function le() {
+    var url = api(card());
+    if (!url || document.hidden) { agenda(INTERVALO); return; }
+    fetch(url, { cache: "no-store" })
+      .then(function (r) { return r.json(); })
+      .then(function (e) { estado = e; })
+      .catch(function () { estado = null; })
+      .then(function () {
+        pinta();
+        agenda(estado && estado.estado === "ligando" ? INTERVALO_TRANSICAO : INTERVALO);
+      });
+  }
+
+  function alterna(ev) {
+    ev.preventDefault();
+    ev.stopPropagation();
+    var li = card(), url = api(li);
+    if (!url || ocupado || !estado) return;
+    var ligar = !ligadoDe(estado);
+    if (!ligar && estado.estado === "em jogo" &&
+        !confirm("Há um jogo em andamento (" + estado.jogo + "). Desligar mesmo assim?")) {
+      return;
+    }
+    ocupado = true;
+    var chave = li.querySelector(".pl-chave");
+    chave.setAttribute("aria-checked", ligar ? "true" : "false");   /* resposta imediata */
+    pinta();
+    fetch(url + (ligar ? "/liga" : "/desliga"), { method: "POST", cache: "no-store" })
+      .then(function (r) { return r.json(); })
+      .then(function (e) { if (e && e.estado) estado = e; })
+      .catch(function () {})
+      .then(function () {
+        ocupado = false;
+        pinta();
+        agenda(INTERVALO_TRANSICAO);
+      });
+  }
+
+  function clicaCard(ev) {
+    if (ev.target.closest(".pl-chave, .service-tags, a, button")) return;
+    var url = destino(card());
+    if (url) window.open(url, "_blank", "noopener");
+  }
+
+  function instala() {
+    var li = card();
+    if (!li) return;
+    var blocos = li.querySelector(".service-container");
+    if (blocos && !blocos.querySelector(".pl-chave")) {
+      /* As classes utilitarias sao as de um .service-block do Homepage, para
+         o bloco ocupar a mesma fracao (flex-1) e alinhar igual. Um filho so
+         (os icones), sem o rotulo que os outros blocos tem embaixo. */
+      var chave = document.createElement("button");
+      chave.type = "button";
+      chave.className = "pl-chave service-block rounded-sm m-1 flex-1 flex flex-col " +
+                        "items-center justify-center text-center p-1";
+      chave.setAttribute("role", "switch");
+      chave.setAttribute("aria-checked", ligadoDe(estado) ? "true" : "false");
+      chave.innerHTML = '<div class="pl-chave-icones">' +
+                        ICONE_DESLIGADO + ICONE_CHAVE + ICONE_LIGADO + '</div>';
+      chave.addEventListener("click", alterna);
+      blocos.insertBefore(chave, blocos.firstChild);
+      li.classList.add("pl-card-streaming");
+      pinta();
+    }
+    if (!li.hasAttribute("data-pl-clique")) {
+      li.setAttribute("data-pl-clique", "");
+      li.addEventListener("click", clicaCard);
+    }
+  }
+
+  new MutationObserver(instala).observe(document.documentElement, { childList: true, subtree: true });
+  instala();
+  le();
+  document.addEventListener("visibilitychange", function () { if (!document.hidden) le(); });
+})();
+

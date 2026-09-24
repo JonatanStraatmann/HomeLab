@@ -79,7 +79,13 @@ services:
     # Tag específica para o RomM (webstation + romm-broker), amd64 apenas.
     image: lscr.io/linuxserver/webstation:romm
     container_name: romm-webstation
+    # Sob demanda: ligado pelo card "Streaming de jogos" do painel e desligado
+    # após 30 min sem jogo (streaming-ocioso.timer). O verifica-containers
+    # ignora containers com esta label quando estão parados. unless-stopped
+    # mantém parado, após um reboot, o que foi desligado.
     restart: unless-stopped
+    labels:
+      homelab.sob-demanda: "true"
     environment:
       PUID: ${PUID:?defina PUID no .env da raiz}
       PGID: ${PGID:?defina PGID no .env da raiz}
