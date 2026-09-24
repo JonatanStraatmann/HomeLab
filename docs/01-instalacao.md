@@ -153,8 +153,12 @@ Conecte ao Jellyfin, ao Radarr e ao Sonarr. Ele pede a API key de cada um.
 
 Assistente inicial cria o usuário administrador. Depois:
 
-1. **Administração → Fontes de metadados**: crie conta em cada provedor que quiser
-   usar e cole as chaves. O Hasheous já vem habilitado e não exige conta.
+1. **Fontes de metadados**: crie conta em cada provedor que quiser usar e preencha
+   as variáveis `ROMM_*` correspondentes no `.env` (depois,
+   `docker compose up -d romm`). O Hasheous já vem habilitado e não exige conta. O
+   IGDB exige um aplicativo no [console de desenvolvedor do Twitch](https://dev.twitch.tv/console)
+   (conta com autenticação em dois fatores; categoria *Application Integration*,
+   tipo *Confidential*, redirect `http://localhost`, nome único).
 2. **Administração → Gerenciamento da biblioteca → Escanear**: identifica os arquivos
    colocados em `${ROMS_ROOT}/roms/<plataforma>/` (a estrutura de pastas está em
    [00-arquitetura.md](00-arquitetura.md); os slugs de plataforma seguem a lista

@@ -7,7 +7,11 @@
 
 services:
   romm:
-    image: rommapp/romm:latest
+    # Versão fixada: o RomM já introduziu mudanças incompatíveis no
+    # config.yml entre versões menores (a 5.3.0 passou a exigir
+    # filesystem.structure). Atualizar deliberadamente, após ler as notas
+    # da release.
+    image: rommapp/romm:5.3.1
     container_name: romm
     restart: unless-stopped
     environment:
@@ -19,6 +23,8 @@ services:
       # Fontes de metadados. Hasheous identifica por hash do arquivo e não
       # exige conta; as demais são opcionais e ficam em branco até o operador
       # criar conta em cada serviço — ver docs/01-instalacao.md.
+      IGDB_CLIENT_ID: ${ROMM_IGDB_CLIENT_ID:-}
+      IGDB_CLIENT_SECRET: ${ROMM_IGDB_CLIENT_SECRET:-}
       SCREENSCRAPER_USER: ${ROMM_SCREENSCRAPER_USER:-}
       SCREENSCRAPER_PASSWORD: ${ROMM_SCREENSCRAPER_PASSWORD:-}
       RETROACHIEVEMENTS_API_KEY: ${ROMM_RETROACHIEVEMENTS_API_KEY:-}
@@ -27,8 +33,9 @@ services:
       SCAN_WORKERS: 4
       WEB_SERVER_CONCURRENCY: 4
     volumes:
-      # Estado gerado pelo RomM fica em APPDATA_ROOT (disco de sistema); o
-      # config.yml, escrito à mão, permanece no repositório.
+      # Estado gerado pelo RomM fica em APPDATA_ROOT (disco de sistema). O
+      # config.yml fica em ./romm/config, fora do git: o próprio RomM o
+      # regrava (como root) ao salvar ajustes pela interface.
       - ${APPDATA_ROOT:?defina APPDATA_ROOT no .env da raiz}/emulacao/romm/resources:/romm/resources   # capas, screenshots etc. buscados nos provedores de metadados
       - ${APPDATA_ROOT:?defina APPDATA_ROOT no .env da raiz}/emulacao/romm/redis-data:/redis-data      # fila de tarefas em segundo plano (scan da biblioteca)
       - ${APPDATA_ROOT:?defina APPDATA_ROOT no .env da raiz}/emulacao/romm/assets:/romm/assets         # save states e saves enviados pela interface

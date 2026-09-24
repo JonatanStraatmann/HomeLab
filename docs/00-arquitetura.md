@@ -65,8 +65,11 @@ Por isso o estado gerado pelos containers fica em `APPDATA_ROOT`, no disco de si
 | `emulacao` | `emulacao/romm-db/data`, `emulacao/romm/{resources,redis-data,assets}` | banco MariaDB, capas e metadados, fila de tarefas, saves |
 
 O que é escrito à mão continua no repositório: a configuração do painel, o
-`index.html` e os scripts do Jellyfin, o `config.yml` do RomM e a stack `infra`
-inteira, cujo estado é pequeno e de baixa taxa de escrita.
+`index.html` e os scripts do Jellyfin e a stack `infra` inteira, cujo estado é
+pequeno e de baixa taxa de escrita. O `config.yml` do RomM é exceção: fica em
+`docker/emulacao/romm/config/`, mas fora do git, porque o próprio RomM o regrava
+(como root) ao salvar ajustes pela interface. Para editá-lo sem sudo, use
+`docker exec romm ...` sobre `/romm/config/config.yml`.
 
 A transcodificação é o caso de maior volume: cada sessão grava vários gigabytes de
 segmentos em `cache/transcodes`, que o Jellyfin remove ao final. Com o cache no NVMe, o
