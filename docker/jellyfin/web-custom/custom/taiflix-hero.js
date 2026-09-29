@@ -81,7 +81,7 @@
     if (!creds) return cb(null);
     fetch(
       location.origin + "/Items/" + id + "?userId=" + creds.userId,
-      { headers: { "X-Emby-Token": creds.token } }
+      { headers: { Authorization: 'MediaBrowser Token="' + creds.token + '"' } }
     )
       .then(function (r) {
         return r.ok ? r.json() : null;

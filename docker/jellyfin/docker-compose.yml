@@ -1,6 +1,10 @@
 services:
   jellyfin:
-    image: jellyfin/jellyfin:latest
+    # Versão fixada: a 12.0 migra o banco sem possibilidade de retorno,
+    # desativa a autenticação legada e reescreve os temas em variáveis CSS,
+    # o que exige revisar o index.html e o CSS/JS em web-custom/. Atualizar
+    # deliberadamente, com backup de config/ e após ler as notas da release.
+    image: jellyfin/jellyfin:10.11.11
     container_name: jellyfin
     restart: unless-stopped
 
