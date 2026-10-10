@@ -32,6 +32,9 @@ layout:
   Infraestrutura:
     style: row
     columns: 3
+  Integração Contínua:
+    style: row
+    columns: 3
   Outros:
     style: row
     columns: 3

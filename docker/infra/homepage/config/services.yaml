@@ -161,6 +161,34 @@
         icon: nginx-proxy-manager.png
         server: local
         container: npm
+
+- Integração Contínua:
+    - Runner de CI:
+        # Dados do painel-status (porta 8099, rota /ci): etapa em execucao,
+        # tempo, avanco estimado pela mediana dos ultimos runs, fila e ultimo
+        # resultado. Sempre visivel: ocioso mostra "aguardando jobs". Sem href,
+        # server nem container de proposito — o nome do projeto fica so no
+        # painel-status, fora do repositorio. display: list porque os textos
+        # (etapa, barra de progresso) nao cabem em blocos.
+        description: Jobs de CI executados neste servidor
+        icon: mdi-progress-check
+        widget:
+          type: customapi
+          url: http://{{HOMEPAGE_VAR_LAN_IP}}:8099/ci
+          refreshInterval: 15000
+          display: list
+          mappings:
+            - field: situacao
+              label: Situação
+            - field: tempo
+              label: No CI há
+            - field: progresso
+              label: Progresso
+            - field: fila
+              label: Fila
+            - field: ultimo
+              label: Último
+
 - Outros:
     - Painel Wakfu:
         # Tailscale Serve: resolve para este servidor de dentro da tailnet, com
