@@ -196,7 +196,9 @@
         # HOMEPAGE_VAR_ENTREGAS_URL, derivado de ENTREGAS_URL no docker-compose.
         href: {{HOMEPAGE_VAR_ENTREGAS_URL}}
         description: Painel de entregas da equipe
-        icon: mdi-truck-delivery-outline
+        # Cronograma (gantt), nao logistica: sao as entregas do planejamento de
+        # desenvolvimento de software.
+        icon: mdi-chart-gantt
         widget:
           type: customapi
           url: http://{{HOMEPAGE_VAR_LAN_IP}}:8099/entregas
