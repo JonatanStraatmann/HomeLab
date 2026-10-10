@@ -588,7 +588,7 @@ widgets do Homepage funcionam. O arquivo está em `chmod 600`. Manter assim.
 
 ## Widgets que dependem de serviço externo
 
-Quatro cards não usam widget nativo, e sim um serviço criado à mão:
+Cinco cards não usam widget nativo, e sim um serviço criado à mão:
 
 ```
 ~/.local/bin/painel-status.py          servidor HTTP em 0.0.0.0:8099
@@ -601,6 +601,7 @@ Quatro cards não usam widget nativo, e sim um serviço criado à mão:
 | `http://$LAN_IP:8099/wakfu` | card "Painel Wakfu" — última e próxima coleta |
 | `http://$LAN_IP:8099/streaming` | card "Streaming de jogos" — campo `situacao`, já em texto: "desliga em X min", "desligada", "jogando Y" ou "ligando..." (os campos `estado`, `jogo` e `desliga` servem à chave) |
 | `http://$LAN_IP:8099/ci` | card "Runner de CI" (seção "Integração Contínua") — etapa em execução, tempo no CI, avanço em %, fila e último resultado. O avanço é estimado pela mediana de duração de cada etapa nos últimos 10 runs bem-sucedidos (recalculada a cada hora); a consulta ao GitHub usa o `gh` do usuário e fica em cache por 20 s. O repositório e o runner monitorados ficam só no `painel-status.py`, não neste repositório |
+| `http://$LAN_IP:8099/entregas` | card "Entregas" (ao lado do Runner de CI) — se o site de entregas da equipe está no ar e quando foi a última atualização, lida do cabeçalho da página. Exige `ENTREGAS_URL`, `ENTREGAS_USER` e `ENTREGAS_PASS` no `.env` da raiz (o site tem login básico); só o endereço vai ao container do Homepage, o login fica com o `painel-status`. Cache de 60 s |
 | `POST http://<nome-tailscale>:8099/streaming/liga` e `/desliga` | chave liga/desliga do mesmo card (`custom.js` seção [E], estilo em `custom.css` [10c]); aceitos só quando a origem é o próprio painel (os endereços de `HOMEPAGE_ALLOWED_HOSTS`) |
 | `http://<nome-tailscale>:8099/streaming/ligar` | alternativa por link: com o container pronto, redireciona ao RomM; desligado, liga e exibe uma página de espera que redireciona sozinha |
 

@@ -189,6 +189,27 @@
             - field: ultimo
               label: Último
 
+    - Entregas:
+        # Dados do painel-status (rota /entregas): se o site esta no ar e
+        # quando foi a ultima atualizacao, lida da propria pagina com o login
+        # ENTREGAS_* do .env (so o painel-status o conhece). O endereco vem de
+        # HOMEPAGE_VAR_ENTREGAS_URL, derivado de ENTREGAS_URL no docker-compose.
+        href: {{HOMEPAGE_VAR_ENTREGAS_URL}}
+        description: Painel de entregas da equipe
+        icon: mdi-truck-delivery-outline
+        widget:
+          type: customapi
+          url: http://{{HOMEPAGE_VAR_LAN_IP}}:8099/entregas
+          refreshInterval: 60000
+          display: block
+          mappings:
+            - field: situacao
+              label: Situação
+            - field: atualizado
+              label: Atualizado
+            - field: ha
+              label: Há
+
 - Outros:
     - Painel Wakfu:
         # Tailscale Serve: resolve para este servidor de dentro da tailnet, com
