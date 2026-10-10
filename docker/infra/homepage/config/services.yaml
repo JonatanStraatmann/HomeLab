@@ -212,6 +212,13 @@
             - field: ha
               label: Há
 
+    - Simulador de demanda:
+        # So um link, sem widget. O endereco vem de SIMULADOR_URL no .env
+        # (HOMEPAGE_VAR_SIMULADOR_URL no docker-compose).
+        href: {{HOMEPAGE_VAR_SIMULADOR_URL}}
+        description: Simulador de demanda da equipe
+        icon: mdi-chart-bell-curve-cumulative
+
 - Outros:
     - Painel Wakfu:
         # Tailscale Serve: resolve para este servidor de dentro da tailnet, com

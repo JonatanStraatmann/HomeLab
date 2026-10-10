@@ -77,6 +77,7 @@ services:
       # So o endereco do site de entregas; o login (ENTREGAS_USER/PASS) nao
       # entra no container, quem le a pagina e o painel-status.
       HOMEPAGE_VAR_ENTREGAS_URL: ${ENTREGAS_URL:-}
+      HOMEPAGE_VAR_SIMULADOR_URL: ${SIMULADOR_URL:-}
       HOMEPAGE_VAR_JELLYFIN_KEY: ${HOMEPAGE_VAR_JELLYFIN_KEY:-}
       HOMEPAGE_VAR_SEERR_KEY:    ${HOMEPAGE_VAR_SEERR_KEY:-}
       HOMEPAGE_VAR_RADARR_KEY:   ${HOMEPAGE_VAR_RADARR_KEY:-}

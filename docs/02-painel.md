@@ -605,6 +605,10 @@ Cinco cards não usam widget nativo, e sim um serviço criado à mão:
 | `POST http://<nome-tailscale>:8099/streaming/liga` e `/desliga` | chave liga/desliga do mesmo card (`custom.js` seção [E], estilo em `custom.css` [10c]); aceitos só quando a origem é o próprio painel (os endereços de `HOMEPAGE_ALLOWED_HOSTS`) |
 | `http://<nome-tailscale>:8099/streaming/ligar` | alternativa por link: com o container pronto, redireciona ao RomM; desligado, liga e exibe uma página de espera que redireciona sozinha |
 
+O card "Simulador de demanda", ao lado do "Entregas", é só um link, sem widget:
+o endereço vem de `SIMULADOR_URL` no `.env` da raiz (`HOMEPAGE_VAR_SIMULADOR_URL`
+no container).
+
 No card, o widget tem dois blocos: a chave, à esquerda, e a situação. A chave é
 um `.service-block` como o outro bloco, com o mesmo fundo e contorno, e os
 ícones da chave de tema do rodapé, sem rótulo. Um clique em qualquer outra
