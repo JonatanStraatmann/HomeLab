@@ -16,6 +16,9 @@
         container: jellyfin
         widget:
           type: jellyfin
+          # version 2: rotas sem o prefixo /emby/ e token no cabeçalho
+          # Authorization, exigidos a partir do Jellyfin 12.
+          version: 2
           url: http://{{HOMEPAGE_VAR_LAN_IP}}:8096
           key: {{HOMEPAGE_VAR_JELLYFIN_KEY}}
           enableBlocks: true
