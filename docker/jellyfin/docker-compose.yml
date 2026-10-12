@@ -1,10 +1,11 @@
 services:
   jellyfin:
-    # Versão fixada: a 12.0 migra o banco sem possibilidade de retorno,
-    # desativa a autenticação legada e reescreve os temas em variáveis CSS,
-    # o que exige revisar o index.html e o CSS/JS em web-custom/. Atualizar
-    # deliberadamente, com backup de config/ e após ler as notas da release.
-    image: jellyfin/jellyfin:10.11.11
+    # Versão fixada. Atualizações podem migrar o banco sem possibilidade de
+    # retorno e mudar a estrutura do jellyfin-web, da qual dependem o
+    # index.html e o CSS/JS em web-custom/. Atualizar deliberadamente: backup
+    # de config/, leitura das notas da release e regeneração do index.html
+    # com web-custom/aplicar-injecoes.py a partir da imagem nova.
+    image: jellyfin/jellyfin:12.2
     container_name: jellyfin
     restart: unless-stopped
 
@@ -38,9 +39,9 @@ services:
       # e isso protege a biblioteca de qualquer gravacao acidental.
       - ${MEDIA_ROOT:?defina MEDIA_ROOT no .env da raiz}:/media:ro,rshared
       # index.html modificado (injeta <script> do hero da home) + a pasta com
-      # o script em si. Extraidos manualmente da imagem; se o Jellyfin for
-      # atualizado e o hero sumir, reextrair o index.html novo e reaplicar a
-      # linha do script. IMPORTANTE: index.html e bind mount de ARQUIVO unico
+      # o script em si. O index.html e gerado por web-custom/aplicar-injecoes.py
+      # a partir do original da imagem; ao trocar a versao da imagem, regerar
+      # (ver docs/03-problemas-conhecidos.md). IMPORTANTE: index.html e bind mount de ARQUIVO unico
       # -> ferramentas que reescrevem via rename quebram o mount (precisa
       # `docker compose up -d` de novo pra recriar). A pasta custom/ e bind
       # mount de DIRETORIO -> edicoes nos arquivos dentro dela refletem ao

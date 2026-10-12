@@ -58,12 +58,23 @@ comportamento: alterações nos arquivos internos são refletidas imediatamente.
 **Sintoma.** Após atualizar a imagem do Jellyfin, a interface apresenta comportamento
 inconsistente ou o conteúdo customizado deixa de funcionar.
 
-**Causa.** O `index.html` versionado é uma cópia extraída da imagem com uma linha
-adicional de `<script>`. O bind mount sobrepõe o arquivo da imagem nova, mantendo em
-uso o HTML de uma versão anterior do Jellyfin.
+**Causa.** O `index.html` versionado é o original da imagem com injeções do Taiflix
+(ícones, título, tela de abertura e o `<script>` de `custom/`). O jellyfin-web
+referencia seus bundles com hash no nome, que muda a cada versão; o bind mount
+sobrepõe o arquivo da imagem nova e mantém referências a bundles inexistentes.
 
-**Solução.** Ao atualizar a imagem, extrair o `index.html` da nova versão e reaplicar a
-inclusão do script.
+**Solução.** Regerar o arquivo a partir do original da imagem em uso, com o script
+`web-custom/aplicar-injecoes.py`, que reaplica os fragmentos de `web-custom/injecoes/`:
+
+```sh
+cd docker/jellyfin/web-custom
+docker run --rm --entrypoint cat jellyfin/jellyfin:<tag> \
+    /jellyfin/jellyfin-web/index.html | ./aplicar-injecoes.py > index.html
+```
+
+O script encerra com erro, sem gerar saída, se algum ponto de encaixe não for
+encontrado, o que indica mudança de estrutura no jellyfin-web. Como `index.html` é bind
+mount de arquivo único, o container precisa ser recriado (`docker compose up -d`).
 
 ## Sonarr remove legendas durante rescan
 
