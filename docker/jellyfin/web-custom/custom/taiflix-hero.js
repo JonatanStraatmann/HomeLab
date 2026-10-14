@@ -45,7 +45,11 @@
   var AUTOPLAY_PARAM = "taiflixPlay";
 
   function isHomeRoute() {
-    return /^#\/home(\.html)?(\?|$)|^#\/?$/.test(location.hash);
+    if (!/^#\/home(\.html)?(\?|$)|^#\/?$/.test(location.hash)) return false;
+    // As demais abas da home (Favoritos e as adicionadas por plugins) usam
+    // ?tab=N; o hero pertence apenas à aba Início (tab ausente ou 0).
+    var tab = /[?&]tab=(\d+)/.exec(location.hash);
+    return !tab || tab[1] === "0";
   }
 
   function isDetailsRoute() {
@@ -289,6 +293,10 @@
   }
 
   function injectNavTabs() {
+    // O layout Modern (Jellyfin 12) já exibe os links das bibliotecas no app
+    // bar. Inserir links na barra de abas desloca os índices usados pelo
+    // componente de abas e quebra abas adicionadas por plugins.
+    if (document.querySelector(".MuiAppBar-root")) return;
     var slider = document.querySelector(".headerTabs .emby-tabs-slider");
     if (!slider || slider.querySelector(".taiflix-navtab")) return;
 
