@@ -6,6 +6,7 @@
    [C] cabecalho da pagina + titulo da secao "Servidor"
    [D] portao de revelacao — libera a tela so quando [A] a [C] estao prontos
    [E] chave liga/desliga do card "Streaming de jogos"   (independente de [A]-[D])
+   [F] limite de tempo nas requisicoes a /api/   (independente de [A]-[E]; vale para todos os widgets)
 
    O Homepage injeta este arquivo DEPOIS da hidratacao do React, nao no HTML
    servido. Medido: primeiro paint em 118 ms, este arquivo em 163 ms. Nessa
@@ -728,3 +729,54 @@
   document.addEventListener("visibilitychange", function () { if (!document.hidden) le(); });
 })();
 
+
+/* ============================================================================
+   [F] REQUISICOES PRESAS — widgets que param de atualizar ate recarregar a pagina
+
+   O Homepage atualiza cada widget com SWR, que reaproveita a requisicao
+   pendente em toda nova tentativa (poll, volta de foco, nova tentativa apos
+   erro). Se uma requisicao ficar pendurada — aba em segundo plano congelada
+   pelo navegador, PC que dormiu, rede que caiu no meio — ela nunca resolve,
+   nem falha, e o widget nao faz mais nenhuma requisicao: so recarregar a pagina
+   destrava. Medido num navegador de teste: apos a 1a requisicao presa, zero
+   requisicoes em 75 s.
+
+   Aqui toda requisicao a /api/ ganha um limite de tempo; estourado, ela e
+   abortada e vira erro, e o SWR tenta de novo sozinho. Ao voltar para a aba, o
+   que estiver pendente ha mais de VELHA e abortado na hora, sem esperar o
+   limite. Vale para todos os widgets, nao so o de CI.
+
+   Nao mexe nas chamadas a outras origens (a chave do card de streaming, [E],
+   fala direto com o painel-status e tem o proprio ciclo) nem nas que ja trazem
+   um AbortSignal.
+   ============================================================================ */
+(function () {
+  "use strict";
+
+  var LIMITE = 25000;   /* ms sem resposta ate abortar */
+  var VELHA = 10000;    /* ms: ao voltar a aba, aborta o que esta pendente ha mais que isso */
+  var emVoo = new Map(); /* AbortController -> instante de inicio */
+  var original = window.fetch.bind(window);
+
+  function daApi(entrada) {
+    var url = typeof entrada === "string" ? entrada : (entrada && entrada.url) || "";
+    return url.indexOf("/api/") === 0 || url.indexOf(location.origin + "/api/") === 0;
+  }
+
+  window.fetch = function (entrada, opcoes) {
+    if (!daApi(entrada) || (opcoes && opcoes.signal)) return original(entrada, opcoes);
+    var ctl = new AbortController();
+    emVoo.set(ctl, Date.now());
+    var limite = setTimeout(function () { ctl.abort(); }, LIMITE);
+    return original(entrada, Object.assign({}, opcoes, { signal: ctl.signal })).finally(function () {
+      clearTimeout(limite);
+      emVoo.delete(ctl);
+    });
+  };
+
+  document.addEventListener("visibilitychange", function () {
+    if (document.hidden) return;
+    var agora = Date.now();
+    emVoo.forEach(function (inicio, ctl) { if (agora - inicio > VELHA) ctl.abort(); });
+  });
+})();

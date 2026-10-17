@@ -609,6 +609,18 @@ O card "Simulador de demanda", ao lado do "Entregas", é só um link, sem widget
 o endereço vem de `SIMULADOR_URL` no `.env` da raiz (`HOMEPAGE_VAR_SIMULADOR_URL`
 no container).
 
+**Widgets que param de atualizar até recarregar a página.** O Homepage atualiza
+cada widget com SWR, que reaproveita a requisição pendente em toda nova
+tentativa. Se uma requisição ficar pendurada (aba em segundo plano congelada
+pelo navegador, computador que dormiu, rede que caiu no meio), ela nunca
+resolve nem falha, e o widget não faz mais nenhuma requisição. Medido num
+navegador de teste: zero requisições em 75 s depois da primeira presa. Além
+disso, o SWR não atualiza aba oculta (volta ao focar). A seção `[F]` do
+`custom.js` dá um limite de 25 s a toda requisição a `/api/`; estourado, ela é
+abortada e o SWR tenta de novo sozinho (com a mesma simulação, o polling voltou
+em ~35 s). Ao voltar para a aba, o que estiver pendente há mais de 10 s é
+abortado na hora. Vale para todos os widgets.
+
 No card, o widget tem dois blocos: a chave, à esquerda, e a situação. A chave é
 um `.service-block` como o outro bloco, com o mesmo fundo e contorno, e os
 ícones da chave de tema do rodapé, sem rótulo. Um clique em qualquer outra
