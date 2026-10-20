@@ -341,12 +341,42 @@
     history.replaceState(null, "", cleanHash);
   }
 
+  // Jellyfin 12.x: com o estilo de legenda "Automático", apenas PS4, Tizen,
+  // webOS, Edge, Firefox e Safari usam a legenda desenhada pelo próprio
+  // player. Nos demais (Chrome, por exemplo) vale a legenda nativa do
+  // navegador (::cue), que desaparece quando os controles do player se
+  // escondem (jellyfin-web #8621). A preferência é gravada apenas no
+  // localStorage do navegador, portanto não pode ser definida pelo servidor.
+  // Aplica-se "Personalizado" uma única vez por usuário em cada navegador,
+  // preservando as demais opções e qualquer escolha posterior.
+  var SUBTITLE_KEY_SUFFIX = "-localplayersubtitleappearance3";
+  var SUBTITLE_MARK_PREFIX = "taiflix-subtitle-custom-";
+
+  function ensureCustomSubtitleStyle() {
+    var creds = getCredentials();
+    if (!creds) return;
+    try {
+      var mark = SUBTITLE_MARK_PREFIX + creds.userId;
+      if (localStorage.getItem(mark)) return;
+      var key = creds.userId + SUBTITLE_KEY_SUFFIX;
+      var settings = JSON.parse(localStorage.getItem(key) || "{}");
+      if (!settings.subtitleStyling || settings.subtitleStyling === "Auto") {
+        settings.subtitleStyling = "Custom";
+        localStorage.setItem(key, JSON.stringify(settings));
+      }
+      localStorage.setItem(mark, "1");
+    } catch (e) {
+      // localStorage indisponível ou conteúdo inválido: mantém o padrão.
+    }
+  }
+
   var scheduled = false;
   function schedule() {
     if (scheduled) return;
     scheduled = true;
     setTimeout(function () {
       scheduled = false;
+      ensureCustomSubtitleStyle();
       tryBuildHero();
       tryBuildDetailsBackdrop();
       tryAutoplay();
