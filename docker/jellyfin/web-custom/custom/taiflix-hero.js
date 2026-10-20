@@ -386,31 +386,6 @@
     }, 250);
   }
 
-  // Módulo opcional de diagnóstico: carregado somente se custom/ contiver o
-  // arquivo. A ausência é lembrada na sessão do navegador para não repetir a
-  // consulta a cada página.
-  (function loadOptionalModule() {
-    var name = "taiflix-subdiag.js";
-    var key = "taiflix-optional-" + name;
-    try {
-      if (sessionStorage.getItem(key) === "ausente") return;
-    } catch (e) {}
-    fetch("custom/" + name, { method: "HEAD", cache: "no-cache" })
-      .then(function (r) {
-        var tipo = r.headers.get("content-type") || "";
-        if (!r.ok || tipo.indexOf("javascript") === -1) {
-          try {
-            sessionStorage.setItem(key, "ausente");
-          } catch (e) {}
-          return;
-        }
-        var s = document.createElement("script");
-        s.src = "custom/" + name + "?v=" + Date.now();
-        document.head.appendChild(s);
-      })
-      .catch(function () {});
-  })();
-
   window.addEventListener("hashchange", function () {
     autoplayHandled = false;
     schedule();
