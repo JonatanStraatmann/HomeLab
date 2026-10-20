@@ -76,6 +76,56 @@ O script encerra com erro, sem gerar saída, se algum ponto de encaixe não for
 encontrado, o que indica mudança de estrutura no jellyfin-web. Como `index.html` é bind
 mount de arquivo único, o container precisa ser recriado (`docker compose up -d`).
 
+## Legendas de uma linha não aparecem em tela cheia no Chrome com aceleração de hardware
+
+**Sintoma.** Em tela cheia, no Chrome para Windows com aceleração de hardware ativa, as
+falas de uma única linha deixam de aparecer enquanto o mouse está parado; as de duas linhas
+aparecem normalmente. As mesmas falas somem de forma repetível e reaparecem quando o mouse é
+movido e a barra do player é exibida. Em janela o problema não ocorre. O elemento da legenda
+consta como visível no DOM (exibição, tamanho, posição e texto corretos), e desligar a
+aceleração de hardware do navegador elimina o sintoma.
+
+**Causa.** Não confirmada. Os dados são compatíveis com uma falha de apresentação: a área
+pequena atualizada por uma fala de uma linha não chega à tela até que uma atualização
+maior, como a da barra do player, force a reapresentação. Não foi reproduzido em Chrome para
+Linux com renderização por software. Os ajustes a seguir não tiveram efeito: estilo de
+legenda (Automático, Personalizado e Nativo), posicionamento aplicado pelo plugin Jellyfin
+Enhanced, a opção `direct-composition-video-overlays`, a decodificação de vídeo por
+hardware e o Skia Graphite.
+
+**Solução.** Acrescentar ao CSS personalizado do Jellyfin (Painel > Geral > CSS
+personalizado) uma variação quase invisível sobre a faixa da legenda, que mantém a área
+sendo reapresentada, e uma altura mínima para o contêiner, que define essa área:
+
+```css
+.videoSubtitles {
+  min-height: 6vw !important;
+  justify-content: flex-end !important;
+  pointer-events: none !important;
+}
+@keyframes taiflix-legenda-pulso {
+  0%   { background-color: rgba(0, 0, 0, .004); }
+  50%  { background-color: rgba(0, 0, 0, .012); }
+}
+.videoSubtitles::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 100%;
+  pointer-events: none;
+  background-color: rgba(0, 0, 0, .004);
+  animation: taiflix-legenda-pulso .2s step-end infinite;
+}
+```
+
+O texto permanece na mesma posição e o contêiner não captura cliques. A regra só atua no
+estilo de legenda Personalizado, único em que o elemento `.videoSubtitles` existe; por isso
+o `taiflix-hero.js` define esse estilo por padrão, uma vez por usuário em cada navegador.
+O CSS personalizado reside na configuração do servidor, fora do repositório; ele precisa ser
+reaplicado em uma instalação nova.
+
 ## Sonarr remove legendas durante rescan
 
 **Sintoma.** Arquivos `.srt` adjacentes aos vídeos são excluídos permanentemente, sem
