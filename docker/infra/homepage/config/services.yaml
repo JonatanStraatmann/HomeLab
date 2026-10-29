@@ -215,6 +215,30 @@
             - field: ha
               label: Há
 
+    - Airflow:
+        # Dados do painel-status (rota /airflow): agendador, ultima execucao das
+        # rotinas agendadas e DAGs de producao pausadas (DAG pausada nao executa
+        # nem registra erro). Os nomes do projeto ficam so no painel-status. A
+        # interface escuta so em localhost; o acesso e pelo tailscale serve na
+        # porta 8446 (somente tailnet).
+        href: https://{{HOMEPAGE_VAR_TS_HOSTNAME}}:8446
+        description: Rotinas agendadas de ingestão de dados
+        icon: apache-airflow.png
+        widget:
+          type: customapi
+          url: http://{{HOMEPAGE_VAR_LAN_IP}}:8099/airflow
+          refreshInterval: 30000
+          display: list
+          mappings:
+            - field: situacao
+              label: Situação
+            - field: diaria
+              label: Diária
+            - field: trocas
+              label: Trocas
+            - field: pausadas
+              label: Pausadas
+
     - Simulador de demanda:
         # So um link, sem widget. O endereco vem de SIMULADOR_URL no .env
         # (HOMEPAGE_VAR_SIMULADOR_URL no docker-compose).

@@ -602,10 +602,11 @@ Cinco cards não usam widget nativo, e sim um serviço criado à mão:
 | `http://$LAN_IP:8099/streaming` | card "Streaming de jogos" — campo `situacao`, já em texto: "desliga em X min", "desligada", "jogando Y" ou "ligando..." (os campos `estado`, `jogo` e `desliga` servem à chave) |
 | `http://$LAN_IP:8099/ci` | card "Runner de CI" (seção "Integração Contínua") — etapa em execução, tempo no CI, avanço em %, fila e último resultado. O avanço é estimado pela mediana de duração de cada etapa nos últimos 10 runs bem-sucedidos (recalculada a cada hora); a consulta ao GitHub usa o `gh` do usuário e fica em cache por 20 s. O repositório e o runner monitorados ficam só no `painel-status.py`, não neste repositório |
 | `http://$LAN_IP:8099/entregas` | card "Entregas" (ao lado do Runner de CI) — se o site de entregas da equipe está no ar e quando foi a última atualização, lida do cabeçalho da página. Exige `ENTREGAS_URL`, `ENTREGAS_USER` e `ENTREGAS_PASS` no `.env` da raiz (o site tem login básico); só o endereço vai ao container do Homepage, o login fica com o `painel-status`. Cache de 60 s |
+| `http://$LAN_IP:8099/airflow` | card "Airflow" (mesma seção) — saúde do agendador, última execução das duas rotinas agendadas (resultado, duração e há quanto tempo) e quantas DAGs de produção estão pausadas, já que uma DAG pausada não executa nem registra erro. Lê o banco de metadados do Airflow em modo somente leitura (`psql` dentro do container do Postgres) e o `/health` da interface; cache de 20 s. A interface escuta apenas em `127.0.0.1` e é publicada na tailnet com `tailscale serve` na porta 8446, destino do link do card. A instalação do Airflow e os nomes das DAGs ficam fora deste repositório |
 | `POST http://<nome-tailscale>:8099/streaming/liga` e `/desliga` | chave liga/desliga do mesmo card (`custom.js` seção [E], estilo em `custom.css` [10c]); aceitos só quando a origem é o próprio painel (os endereços de `HOMEPAGE_ALLOWED_HOSTS`) |
 | `http://<nome-tailscale>:8099/streaming/ligar` | alternativa por link: com o container pronto, redireciona ao RomM; desligado, liga e exibe uma página de espera que redireciona sozinha |
 
-O card "Simulador de demanda", ao lado do "Entregas", é só um link, sem widget:
+O card "Simulador de demanda", depois do "Airflow", é só um link, sem widget:
 o endereço vem de `SIMULADOR_URL` no `.env` da raiz (`HOMEPAGE_VAR_SIMULADOR_URL`
 no container).
 
