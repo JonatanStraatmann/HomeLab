@@ -219,9 +219,13 @@
         # Dados do painel-status (rota /airflow): agendador, ultima execucao das
         # rotinas agendadas e DAGs de producao pausadas (DAG pausada nao executa
         # nem registra erro). Os nomes do projeto ficam so no painel-status. A
-        # interface escuta so em localhost; o acesso e pelo tailscale serve na
-        # porta 8446 (somente tailnet).
-        href: https://{{HOMEPAGE_VAR_TS_HOSTNAME}}:8446
+        # interface web e sob demanda: o link passa pelo painel-status
+        # (/airflow/ligar), que liga o container se preciso e redireciona ao
+        # tailscale serve na porta 8446 (somente tailnet) quando ele responde.
+        # Desliga sozinha apos 30 min sem acesso (airflow-ocioso); as rotinas
+        # agendadas nao dependem dela. Nome Tailscale em vez do IP da LAN: o
+        # link abre no navegador do cliente, que pode estar fora de casa.
+        href: http://{{HOMEPAGE_VAR_TS_HOSTNAME}}:8099/airflow/ligar
         description: Rotinas agendadas de ingestão de dados
         icon: apache-airflow.png
         widget:
@@ -238,6 +242,8 @@
               label: Trocas
             - field: pausadas
               label: Pausadas
+            - field: interface
+              label: Interface
 
     - Simulador de demanda:
         # So um link, sem widget. O endereco vem de SIMULADOR_URL no .env
