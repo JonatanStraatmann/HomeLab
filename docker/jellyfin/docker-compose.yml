@@ -48,6 +48,12 @@ services:
       # vivo, sem precisar recriar o container.
       - ./web-custom/index.html:/jellyfin/jellyfin-web/index.html:ro
       - ./web-custom/custom:/jellyfin/jellyfin-web/custom:ro
+      # Nomes estaveis dos nodos de GPU, por endereco PCI. O dispositivo VAAPI
+      # do Painel aponta para /dev/dri/by-path/<GPU_PCI>-render, e nao para
+      # renderD128: com duas GPUs, essa numeracao depende da ordem de carga dos
+      # drivers no boot. Os links sao relativos (../renderD129) e resolvem
+      # para os nodos que o bloco devices cria com o mesmo nome do host.
+      - /dev/dri/by-path:/dev/dri/by-path:ro
 
     environment:
       - TZ=${TZ:?defina TZ no .env da raiz}

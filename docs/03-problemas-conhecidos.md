@@ -204,6 +204,39 @@ com o iframe apontando para um endereço HTTPS.
 **Solução.** Acessar o RomM pelo endereço HTTPS do `tailscale serve` (porta 8444),
 descrito em [01-instalacao.md](01-instalacao.md).
 
+## GPU trocada após atualização de kernel (máquina com duas GPUs)
+
+**Sintoma.** O streaming de emulação exibe tela escura e o emulador encerra segundos
+depois de abrir: PCSX2 com código -6 e *"Failed to create wl_display"*, RetroArch com
+código -11. O log do `romm-webstation` registra *"GPU renderer failed to initialize"* e
+*"[svc-de] ... found launching de"* repetido a cada segundo. No Jellyfin, a
+transcodificação por hardware falha, e `vainfo` no dispositivo configurado responde
+*"vaInitialize failed"*.
+
+**Causa.** Os nomes `renderD128` e `renderD129` são atribuídos na ordem em que os
+drivers de vídeo carregam no boot. Quando o initramfs de um kernel novo passa a incluir
+o driver NVIDIA, ele carrega antes do `i915` e a GPU dedicada assume `renderD128`.
+Configurações fixadas nesse nome passam a apontar para a NVIDIA, que não tem driver de
+espaço de usuário nos containers. O compositor do webstation não inicia e os emuladores
+ficam sem tela.
+
+**Diagnóstico.** O endereço da GPU integrada Intel (`pci-0000:00:02.0`) mostra qual
+nodo ela recebeu neste boot:
+
+```bash
+ls -l /dev/dri/by-path/
+```
+
+**Solução.** A GPU é escolhida pelo endereço PCI (`GPU_PCI` no `.env`), que não muda
+entre boots. O Jellyfin recebe `/dev/dri/by-path` e usa `/dev/dri/by-path/<GPU_PCI>-render`
+como dispositivo VAAPI. No webstation, o Selkies só aceita nomes no formato `renderD*`;
+o script `docker/emulacao/webstation/custom-cont-init.d/10-gpu-por-pci` converte o
+endereço no nome do boot atual e o exporta como `DRINODE` e `DRI_NODE`.
+
+Mapear o nodo com outro nome dentro do container (`<GPU_PCI>-render:/dev/dri/renderD128`)
+não resolve: a libdrm reconstrói o caminho a partir do número do dispositivo no host
+(`renderD129`), que não existe no container, e o VA-API falha ao abrir o display.
+
 ## ROM de 3DS "descriptografada" é recusada como criptografada
 
 **Sintoma.** O streaming de 3DS não inicia; o núcleo Azahar registra *"This ROM is

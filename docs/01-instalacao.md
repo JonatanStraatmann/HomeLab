@@ -143,7 +143,9 @@ provedores de legenda. Prefira scan item a item ao scan em lote.
 
 Assistente inicial, e adicione as bibliotecas apontando para `/media`. Se for usar
 transcodificação por hardware: **Painel → Reprodução** → VAAPI, dispositivo
-`/dev/dri/renderD128`.
+`/dev/dri/by-path/<GPU_PCI>-render` (por exemplo,
+`/dev/dri/by-path/pci-0000:00:02.0-render`), e não `renderD128`: ver
+[GPU trocada após atualização de kernel](03-problemas-conhecidos.md#gpu-trocada-após-atualização-de-kernel-máquina-com-duas-gpus).
 
 ### Seerr (`:5055`)
 

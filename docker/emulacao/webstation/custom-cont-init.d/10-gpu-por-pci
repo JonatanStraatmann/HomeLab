@@ -1,0 +1,16 @@
+#!/usr/bin/with-contenv bash
+# Converte GPU_PCI (endereço PCI, formato de /dev/dri/by-path) no nodo
+# /dev/dri/renderD* que a GPU recebeu neste boot e o exporta para os serviços
+# do container. Roda como root, depois dos scripts de init da imagem e antes
+# dos serviços (Selkies, compositor, broker), que leem o ambiente ao iniciar.
+
+nodo="$(readlink -f "/dev/dri/by-path/${GPU_PCI}-render" 2>/dev/null)"
+
+if [[ -z "${GPU_PCI}" || "${nodo}" != /dev/dri/renderD* || ! -c "${nodo}" ]]; then
+    echo "[gpu-por-pci] nodo de '${GPU_PCI}' não encontrado; GPU não configurada"
+    exit 0
+fi
+
+printf '%s' "${nodo}" > /run/s6/container_environment/DRINODE
+printf '%s' "${nodo}" > /run/s6/container_environment/DRI_NODE
+echo "[gpu-por-pci] ${GPU_PCI} -> ${nodo}"

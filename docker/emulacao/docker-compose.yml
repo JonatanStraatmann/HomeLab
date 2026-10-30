@@ -103,9 +103,15 @@ services:
       TZ: ${TZ:?defina TZ no .env da raiz}
       SUBFOLDER: /streaming/
       BROKER_SECRET: ${ROMM_STREAMING_BROKER_SECRET:?defina ROMM_STREAMING_BROKER_SECRET no .env da raiz}
-      # GPU integrada Intel (renderD128). A NVIDIA (renderD129) exigiria o
-      # nvidia-container-toolkit no host.
-      DRINODE: /dev/dri/renderD128
+      # GPU integrada Intel, escolhida pelo endereço PCI. O script de
+      # webstation/custom-cont-init.d converte GPU_PCI no nome renderD* que a
+      # GPU recebeu neste boot e o exporta como DRINODE (renderização) e
+      # DRI_NODE (codificação VA-API); o Selkies só aceita esse formato de
+      # nome, e a numeração muda com a ordem de carga dos drivers. AUTO_GPU
+      # desligado impede a escolha automática, que pegaria o primeiro nodo.
+      # A NVIDIA exigiria o nvidia-container-toolkit no host.
+      GPU_PCI: ${GPU_PCI:?defina GPU_PCI no .env da raiz}
+      AUTO_GPU: "false"
     devices:
       - /dev/dri:/dev/dri
     volumes:
@@ -114,6 +120,9 @@ services:
       # Mesma biblioteca e mesmo caminho do RomM (o broker recusa ROMs fora
       # de /romm e o library_path padrão do config.yml é /romm/library).
       - ${ROMS_ROOT:?defina ROMS_ROOT no .env da raiz}:/romm/library:ro
+      # Nomes estáveis dos nodos de GPU e o script que escolhe entre eles.
+      - /dev/dri/by-path:/dev/dri/by-path:ro
+      - ./webstation/custom-cont-init.d:/custom-cont-init.d:ro
     ports:
       # Só localhost: a interface não tem login próprio. O acesso pelo
       # navegador passa pelo tailscale serve (HTTPS, obrigatório para o
